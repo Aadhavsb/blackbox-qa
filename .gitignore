@@ -1,0 +1,39 @@
+# Data — never commit raw NTSB downloads
+/data/*
+!/data/.gitkeep
+
+# Secrets / local config
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local model / embedding caches
+.cache/
+models/
+
+# Langfuse / docker local state
+/.langfuse/
+/postgres-data/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

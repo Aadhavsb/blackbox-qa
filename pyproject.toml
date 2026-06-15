@@ -1,0 +1,40 @@
+[project]
+name = "blackbox-qa"
+version = "0.0.1"
+description = "Agentic Q&A over public NTSB aviation incident reports: hybrid retrieval, tool-calling agent, eval-gated CI."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Aadhav Bharadwaj" }]
+
+# Versions are intentionally unpinned here; resolved + locked at install time.
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "psycopg[binary]",
+    "pgvector",
+    "sentence-transformers",
+    "openai",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "numpy",
+]
+
+[project.optional-dependencies]
+observability = ["langfuse"]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+blackbox-qa = "blackbox_qa.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

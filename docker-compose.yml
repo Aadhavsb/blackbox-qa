@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-blackbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blackbox}
+      POSTGRES_DB: ${POSTGRES_DB:-blackbox}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-blackbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+# Self-hosted Langfuse lives behind an optional profile so the core stack
+# stays minimal: `docker compose --profile observability up`.
+# (Service definitions added in phase 4.)
