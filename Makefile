@@ -1,15 +1,19 @@
-.PHONY: help db-up db-down ingest serve eval fmt lint test
+.PHONY: help install db-up db-down ingest serve eval fmt lint test
 
 help:
 	@echo "Targets:"
+	@echo "  install  Install deps into a poetry venv"
 	@echo "  db-up    Start Postgres (pgvector) via docker compose"
 	@echo "  db-down  Stop and remove the local stack"
 	@echo "  ingest   Download NTSB data, convert .mdb, load + embed + index"
 	@echo "  serve    Run the FastAPI app"
-	@echo "  eval     Run the local eval pipeline"
+	@echo "  eval     Run the local eval pipeline (retrieval mode)"
 	@echo "  fmt      Format + autofix with ruff"
 	@echo "  lint     Lint with ruff"
 	@echo "  test     Run pytest"
+
+install:
+	poetry install
 
 db-up:
 	docker compose up -d postgres
@@ -19,19 +23,19 @@ db-down:
 
 # Phase 1: implemented in src/blackbox_qa/ingest.py
 ingest:
-	python -m blackbox_qa.ingest
+	poetry run python -m blackbox_qa.ingest
 
 serve:
-	uvicorn blackbox_qa.app:app --reload --port 8000
+	poetry run uvicorn blackbox_qa.app:app --reload --port 8000
 
 eval:
-	python -m evals.run --mode retrieval
+	poetry run python -m evals.run --mode retrieval
 
 fmt:
-	ruff format . && ruff check --fix .
+	poetry run ruff format . && poetry run ruff check --fix .
 
 lint:
-	ruff check .
+	poetry run ruff check .
 
 test:
-	pytest -q
+	poetry run pytest -q

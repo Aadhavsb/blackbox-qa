@@ -41,13 +41,20 @@ NTSB aviation accident data (1982–present) from <https://data.ntsb.gov/avdata/
 
 ## Quickstart
 
+Dependencies are managed with [Poetry](https://python-poetry.org/) (`pyproject.toml` + `poetry.lock`).
+
 ```bash
+poetry install                          # runtime + dev deps
+# poetry install --extras observability # + Langfuse
+
 make db-up        # start Postgres (pgvector) via docker compose
 make ingest       # download NTSB data, convert .mdb, load + embed + index
 make serve        # FastAPI app
 # or:
-python -m blackbox_qa.cli "your question here"
+poetry run blackbox-qa "your question here"
 ```
+
+Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest.
 
 ## Phases
 

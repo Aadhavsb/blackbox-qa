@@ -3,11 +3,11 @@ name = "blackbox-qa"
 version = "0.0.1"
 description = "Agentic Q&A over public NTSB aviation incident reports: hybrid retrieval, tool-calling agent, eval-gated CI."
 readme = "README.md"
-requires-python = ">=3.12"
-license = { file = "LICENSE" }
+requires-python = ">=3.12,<4.0"
+license = "MIT"
 authors = [{ name = "Aadhav Bharadwaj" }]
 
-# Versions are intentionally unpinned here; resolved + locked at install time.
+# Versions are resolved + pinned in poetry.lock (run `poetry lock` to refresh).
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -22,18 +22,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# `poetry install --extras observability` (or `pip install ".[observability]"`)
 observability = ["langfuse"]
-dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
 blackbox-qa = "blackbox_qa.cli:main"
 
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+[tool.poetry]
+packages = [{ include = "blackbox_qa", from = "src" }]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+ruff = "*"
+mypy = "*"
 
 [tool.ruff]
 line-length = 100
@@ -42,3 +43,7 @@ target-version = "py312"
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
