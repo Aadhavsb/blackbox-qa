@@ -65,6 +65,9 @@ _REPORT_FIELDS = [
     "acft_make", "acft_model", "acft_series", "acft_category", "far_part", "damage",
 ]
 
+# NTSB narratives table column -> chunk `source` label.
+_NARRATIVE_SOURCES = {"narr_accp": "factual", "narr_cause": "cause"}
+
 
 def _require_mdbtools() -> None:
     if shutil.which("mdb-export") is None:
@@ -190,11 +193,63 @@ def load_reports(mdb_path: Path, limit: int | None = None, batch_size: int = 100
     return inserted
 
 
+def load_chunks(mdb_path: Path, embed_batch: int = 256) -> int:
+    """Chunk + embed report narratives into `report_chunks`.
+
+    Only narratives whose ev_id already exists in `reports` are loaded, so run
+    the reports stage first.
+    """
+    from blackbox_qa import chunking, embeddings
+
+    sql = (
+        "INSERT INTO report_chunks (ev_id, source, chunk_index, content, embedding) "
+        "VALUES (%s, %s, %s, %s, %s) "
+        "ON CONFLICT (ev_id, source, chunk_index) DO NOTHING"
+    )
+
+    with db.connect() as conn, conn.cursor() as cur:
+        existing = {r[0] for r in conn.execute("SELECT ev_id FROM reports").fetchall()}
+        meta: list[tuple[str, str, int]] = []
+        texts: list[str] = []
+        inserted = 0
+
+        def flush() -> None:
+            nonlocal inserted
+            if not texts:
+                return
+            vecs = embeddings.embed_passages(texts)
+            rows = [(m[0], m[1], m[2], t, v) for m, t, v in zip(meta, texts, vecs, strict=True)]
+            cur.executemany(sql, rows)
+            inserted += len(rows)
+            meta.clear()
+            texts.clear()
+
+        for row in read_table(mdb_path, "narratives"):
+            ev_id = row.get("ev_id")
+            if not ev_id or ev_id not in existing:
+                continue
+            for src_col, source in _NARRATIVE_SOURCES.items():
+                text = chunking.normalize(row.get(src_col) or "")
+                if not text:
+                    continue
+                for idx, chunk in enumerate(chunking.chunk_text(text)):
+                    meta.append((ev_id, source, idx))
+                    texts.append(chunk)
+                    if len(texts) >= embed_batch:
+                        flush()
+        flush()
+    return inserted
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ingest NTSB aviation data into Postgres.")
     parser.add_argument("--limit", type=int, default=None, help="max events to load")
     parser.add_argument("--mdb", type=Path, default=None, help="path to an existing avall.mdb")
     parser.add_argument("--skip-download", action="store_true")
+    parser.add_argument(
+        "--stage", choices=("reports", "chunks", "all"), default="all",
+        help="which stage(s) to run",
+    )
     args = parser.parse_args()
 
     db.apply_schema()
@@ -202,8 +257,12 @@ def main() -> int:
     if not mdb_path.exists():
         raise SystemExit(f"mdb not found: {mdb_path}")
 
-    n = load_reports(mdb_path, limit=args.limit)
-    print(f"loaded {n} reports (total in db: {db.count_rows('reports')})")
+    if args.stage in ("reports", "all"):
+        n = load_reports(mdb_path, limit=args.limit)
+        print(f"loaded {n} reports (total in db: {db.count_rows('reports')})")
+    if args.stage in ("chunks", "all"):
+        n = load_chunks(mdb_path)
+        print(f"loaded {n} chunks (total in db: {db.count_rows('report_chunks')})")
     return 0
 
 
