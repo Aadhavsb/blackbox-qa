@@ -1,0 +1,7 @@
+# Template for evals/gold/retrieval_gold.jsonl (the committed gold set).
+# One JSON object per line. ev_id must match a real reports.ev_id after ingest.
+# Either "ev_id" (single gold report) or "ev_ids" (list) is accepted.
+# Lines starting with '#' and blank lines are ignored by the loader.
+{"query": "engine failure shortly after takeoff in a single-engine Cessna", "ev_id": "EXAMPLE_0001", "note": "replace ev_id with a real event after ingest"}
+{"query": "fuel exhaustion leading to forced landing", "ev_id": "EXAMPLE_0002"}
+{"query": "loss of control in instrument meteorological conditions", "ev_ids": ["EXAMPLE_0003", "EXAMPLE_0004"]}
