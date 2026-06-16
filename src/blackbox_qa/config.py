@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     judge_model: str = ""
 
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     langfuse_enabled: bool = False
     langfuse_host: str | None = None

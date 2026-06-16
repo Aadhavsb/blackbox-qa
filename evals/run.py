@@ -36,7 +36,7 @@ def _relevant(row: dict) -> set[str]:
     return {row["ev_id"]}
 
 
-def run_retrieval(gold: list[dict], k: int) -> dict:
+def run_retrieval(gold: list[dict], k: int, use_rerank: bool = False) -> dict:
     # Imported here so the heavy retrieval stack only loads for this mode.
     from blackbox_qa.retrieval import search_reports
 
@@ -44,7 +44,7 @@ def run_retrieval(gold: list[dict], k: int) -> dict:
     rrs: list[float] = []
     for row in gold:
         relevant = _relevant(row)
-        retrieved = search_reports(row["query"], top_k=k)
+        retrieved = search_reports(row["query"], top_k=k, use_rerank=use_rerank)
         recalls.append(metrics.recall_at_k(retrieved, relevant, k))
         rrs.append(metrics.reciprocal_rank(retrieved, relevant))
     return {
@@ -54,11 +54,29 @@ def run_retrieval(gold: list[dict], k: int) -> dict:
     }
 
 
+def run_ablation(gold: list[dict], k: int) -> dict:
+    """Hybrid vs. hybrid+rerank on the same gold set."""
+    base = run_retrieval(gold, k, use_rerank=False)
+    rerank = run_retrieval(gold, k, use_rerank=True)
+    rk = f"recall@{k}"
+    return {
+        "n": len(gold),
+        "hybrid": {rk: base[rk], "mrr": base["mrr"]},
+        "hybrid+rerank": {rk: rerank[rk], "mrr": rerank["mrr"]},
+        "delta": {
+            rk: round(rerank[rk] - base[rk], 4),
+            "mrr": round(rerank["mrr"] - base["mrr"], 4),
+        },
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="blackbox-qa eval runner")
     parser.add_argument("--mode", choices=("retrieval", "judge-slice", "full"), default="retrieval")
     parser.add_argument("--gold", type=Path, default=DEFAULT_GOLD)
     parser.add_argument("--k", type=int, default=5)
+    parser.add_argument("--rerank", action="store_true", help="add cross-encoder rerank stage")
+    parser.add_argument("--ablation", action="store_true", help="compare hybrid vs hybrid+rerank")
     parser.add_argument("--baseline", type=Path, default=None, help="baseline results JSON")
     parser.add_argument("--max-drop", type=float, default=0.01, help="allowed Recall@k drop")
     args = parser.parse_args()
@@ -72,7 +90,12 @@ def main() -> int:
             f"Populate it from ingested data (see evals/gold/retrieval_gold.example.jsonl)."
         )
 
-    result = run_retrieval(load_gold(args.gold), args.k)
+    gold = load_gold(args.gold)
+    if args.ablation:
+        print(json.dumps(run_ablation(gold, args.k), indent=2))
+        return 0
+
+    result = run_retrieval(gold, args.k, use_rerank=args.rerank)
     print(json.dumps(result, indent=2))
 
     if args.baseline and args.baseline.exists():

@@ -58,19 +58,25 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 ## Results
 
-Phase 1 (hybrid retrieval) on a 2008 NTSB slice — 3,000 reports / ~14k narrative chunks:
+On a 2008 NTSB slice — 3,000 reports / ~14k narrative chunks, 12-query hand-curated gold set:
 
-| Metric | Value |
-|---|---|
-| Recall@5 | 0.75 |
-| MRR | 0.64 |
+| Stage | Recall@5 | MRR |
+|---|---|---|
+| Hybrid (dense + FTS, RRF) | 0.75 | 0.64 |
+| Hybrid + cross-encoder rerank | 0.75 | **0.75** |
 
-Measured over a 12-query hand-curated gold set (`evals/gold/retrieval_gold.jsonl`), with queries paraphrased so this reflects retrieval quality, not memorization. Baseline committed at `evals/baseline.json`; phase 1.5 adds a cross-encoder rerank ablation measured against it.
+Reranking can't add documents the first stage missed, so Recall@5 is unchanged; it reorders the candidate pool, lifting the right report higher and improving **MRR +0.11 (~17% relative)**. Queries are paraphrased so this reflects retrieval quality, not memorization. Reproduce:
+
+```bash
+poetry run python -m evals.run --mode retrieval --ablation --k 5
+```
+
+Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.json`.
 
 ## Phases
 
 1. Ingest + hybrid retrieval + gold set (Recall@5 / MRR measured) ✅
-2. (1.5) Cross-encoder rerank stage, reported as ablation numbers
+2. (1.5) Cross-encoder rerank stage, reported as ablation numbers ✅
 3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry
 4. Langfuse tracing + judge scores via Scores API
 5. CI eval pipeline (GitHub Actions + pgvector service container, manually triggered)

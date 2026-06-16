@@ -76,9 +76,19 @@ def hybrid_search(query: str, top_k: int = 5, candidates: int = 50) -> list[Hit]
     return out
 
 
-def search_reports(query: str, top_k: int = 5, candidates: int = 50) -> list[str]:
-    """Report-level results: distinct ev_ids in fused order (for Recall@k)."""
+def search_reports(
+    query: str, top_k: int = 5, candidates: int = 50, use_rerank: bool = False
+) -> list[str]:
+    """Report-level results: distinct ev_ids in ranked order (for Recall@k).
+
+    With use_rerank, the fused candidate pool is reordered by a cross-encoder
+    before being collapsed to reports.
+    """
     hits = hybrid_search(query, top_k=candidates, candidates=candidates)
+    if use_rerank:
+        from blackbox_qa.rerank import rerank_hits
+
+        hits = rerank_hits(query, hits)
     seen: list[str] = []
     for h in hits:
         if h.ev_id not in seen:
