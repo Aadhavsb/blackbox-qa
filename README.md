@@ -56,9 +56,20 @@ poetry run blackbox-qa "your question here"
 
 Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest.
 
+## Results
+
+Phase 1 (hybrid retrieval) on a 2008 NTSB slice — 3,000 reports / ~14k narrative chunks:
+
+| Metric | Value |
+|---|---|
+| Recall@5 | 0.75 |
+| MRR | 0.64 |
+
+Measured over a 12-query hand-curated gold set (`evals/gold/retrieval_gold.jsonl`), with queries paraphrased so this reflects retrieval quality, not memorization. Baseline committed at `evals/baseline.json`; phase 1.5 adds a cross-encoder rerank ablation measured against it.
+
 ## Phases
 
-1. Ingest + hybrid retrieval + gold set (Recall@5 / MRR measured)
+1. Ingest + hybrid retrieval + gold set (Recall@5 / MRR measured) ✅
 2. (1.5) Cross-encoder rerank stage, reported as ablation numbers
 3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry
 4. Langfuse tracing + judge scores via Scores API

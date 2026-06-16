@@ -1,0 +1,15 @@
+# Retrieval gold set (hand-curated against the ingested NTSB corpus, 2008 slice).
+# Queries are paraphrased (not lifted from the narrative) so this measures real
+# retrieval, not memorization. Expand over time; see retrieval_gold.example.jsonl.
+{"query": "midair collision between two light aircraft near a county airport in California", "ev_id": "20080107X00026"}
+{"query": "ground crew member fatally struck by a spinning propeller on the ramp", "ev_id": "20080107X00027"}
+{"query": "Boeing 747 lost all four electrical generator control units and landed on standby power", "ev_id": "20080111X00039"}
+{"query": "small airplane forced landing in the Florida Everglades after losing engine power", "ev_id": "20080114X00044"}
+{"query": "twin-engine airplane crashed into the ocean shortly after takeoff from Kodiak Alaska", "ev_id": "20080116X00063"}
+{"query": "commuter airplane disappeared from radar over the ocean near Kauai Hawaii", "ev_id": "20080117X00067"}
+{"query": "airliner being towed collided with another jet at San Francisco airport", "ev_id": "20080118X00073"}
+{"query": "airplane lost power after takeoff and crashed into a house in a residential area in Namibia", "ev_id": "20080118X00079"}
+{"query": "Airbus A319 had a sudden uncommanded roll upset at cruise altitude over British Columbia", "ev_id": "20080122X00081"}
+{"query": "air ambulance Cessna Caravan struck snow-covered terrain during the landing flare in Alaska", "ev_id": "20080118X00074"}
+{"query": "floatplane lost engine power and went down near The Dalles in Washington state", "ev_id": "20080117X00069"}
+{"query": "light sport aircraft lost engine power on final approach and made a forced landing in Maryland", "ev_id": "20080115X00046"}
