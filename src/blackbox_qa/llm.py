@@ -63,12 +63,19 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     return min(2.0 ** attempt, 60.0)
 
 
+_RATE_LIMIT_PHRASES = ("rate_limit", "rate limit", "tokens per minute", "request too large")
+
+
 def _is_rate_limited(exc: Exception) -> bool:
     """True for 429s and Groq's 413 tokens-per-minute rate-limit (both clear by waiting)."""
     if type(exc).__name__ == "RateLimitError":
         return True
     code = getattr(exc, "status_code", None)
-    return code == 413 and "rate_limit" in str(exc).lower()
+    if code == 429:
+        return True
+    text = str(exc).lower()
+    # Groq returns 413 for TPM caps; match the several phrasings providers use.
+    return code == 413 and any(p in text for p in _RATE_LIMIT_PHRASES)
 
 
 def _create_with_backoff(kwargs: dict[str, Any]):
