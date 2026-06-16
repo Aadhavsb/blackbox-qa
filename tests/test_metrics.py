@@ -39,6 +39,12 @@ def test_mean():
     assert mean([]) == 0.0
 
 
+def test_recall_dedupes_duplicates_not_over_one():
+    # Duplicate retrieved ids must not push recall above 1.0.
+    assert recall_at_k(["a", "a", "a"], {"a"}, k=3) == 1.0
+    assert recall_at_k(["a", "a", "b"], {"a", "b"}, k=3) == 1.0
+
+
 def test_empty_relevant_raises():
     with pytest.raises(ValueError):
         recall_at_k(["a"], set(), k=5)

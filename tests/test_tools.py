@@ -38,6 +38,29 @@ def test_validate_select_rejects_writes_and_junk(sql):
         validate_select(sql)
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT pg_sleep(10)",
+        "SELECT pg_read_file('/etc/passwd')",
+        "SELECT lo_import('/etc/passwd')",
+        "SELECT * FROM dblink('host=x', 'select 1') AS t(a int)",
+        "SELECT set_config('x', 'y', false)",
+        "SELECT current_setting('data_directory')",
+        "select count(*) from reports where ev_id in (select pg_sleep(5))",
+    ],
+)
+def test_validate_select_rejects_side_effect_functions(sql):
+    with pytest.raises(ToolError):
+        validate_select(sql)
+
+
+def test_validate_select_allows_ordinary_functions():
+    # Aggregates / harmless functions must still pass.
+    assert validate_select("SELECT count(*), max(ev_year) FROM reports")
+    assert validate_select("SELECT lower(acft_make) FROM reports")
+
+
 def test_validate_select_rejects_non_string():
     with pytest.raises(ToolError):
         validate_select(123)  # type: ignore[arg-type]

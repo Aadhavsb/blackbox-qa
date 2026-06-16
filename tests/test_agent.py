@@ -86,3 +86,55 @@ def test_turn_cap_forces_tool_choice_none(monkeypatch):
     result = agent.run("loops forever?", max_turns=3)
     assert result.turns == 3
     assert seen[-1] == "none"
+
+
+def test_unexpected_tool_exception_does_not_crash(monkeypatch):
+    # A non-ToolError (e.g. a DB failure) must be caught and fed back as an
+    # error string so the loop self-corrects instead of crashing.
+    def boom(name, args):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(agent.tools, "dispatch", boom)
+    _script(
+        monkeypatch,
+        [
+            _call("sql_query", '{"sql": "select 1"}'),
+            _text("Recovered without that tool. CONFIDENCE: high"),
+        ],
+    )
+    result = agent.run("q")
+    assert result.turns == 2
+    assert any("error" in e for e in result.tool_log)
+    assert "RuntimeError" in str(result.tool_log)
+
+
+def test_tool_call_budget_is_capped(monkeypatch):
+    monkeypatch.setattr(agent, "MAX_TOOL_CALLS", 2)
+    calls = {"n": 0}
+
+    def counting_dispatch(name, args):
+        calls["n"] += 1
+        return "ok"
+
+    monkeypatch.setattr(agent.tools, "dispatch", counting_dispatch)
+    three_calls = llm.LLMResponse(
+        content=None,
+        tool_calls=[llm.ToolCall(f"c{i}", "hybrid_search", '{"query": "x"}') for i in range(3)],
+    )
+    _script(monkeypatch, [three_calls, _text("Done. CONFIDENCE: high")])
+    result = agent.run("q")
+    assert calls["n"] == 2  # third call was over budget, not executed
+    assert any(e.get("error") == "tool budget exhausted" for e in result.tool_log)
+
+
+def test_empty_final_turn_is_repaired(monkeypatch):
+    # On the final turn the model still emits a tool call (empty content); the
+    # loop must force one plain-text answer rather than returning "".
+    final_tool_call = _call("hybrid_search", '{"query": "x"}')
+    seen = _script(
+        monkeypatch,
+        [final_tool_call, _text("Best-effort answer. CONFIDENCE: low")],
+    )
+    result = agent.run("q", max_turns=1)
+    assert result.answer == "Best-effort answer."
+    assert seen == ["none", "none"]  # final turn + repair, both tool-free
