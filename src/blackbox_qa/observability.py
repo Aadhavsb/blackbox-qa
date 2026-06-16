@@ -47,17 +47,29 @@ def _client():
 @contextmanager
 def observation(name: str, as_type: str = "span", **kwargs: Any) -> Iterator[Any]:
     """Open a trace observation (span/generation/tool/agent). Yields None when
-    disabled OR when the SDK errors — the caller's logic is identical either way."""
+    disabled OR when the SDK errors — the caller's logic is identical either way.
+
+    Only the SDK enter/exit are guarded; exceptions raised by the *caller's*
+    block propagate normally (we must not swallow real agent errors or yield
+    twice from this generator)."""
     client = _client() if enabled() else None
     if client is None:
         yield None
         return
     try:
-        with client.start_as_current_observation(name=name, as_type=as_type, **kwargs) as obs:
-            yield obs
-    except Exception:  # noqa: BLE001
-        logger.warning("Langfuse observation failed; continuing untraced", exc_info=True)
+        cm = client.start_as_current_observation(name=name, as_type=as_type, **kwargs)
+        span = cm.__enter__()
+    except Exception:  # noqa: BLE001 - SDK setup failure must not break the caller
+        logger.warning("Langfuse observation start failed; continuing untraced", exc_info=True)
         yield None
+        return
+    try:
+        yield span
+    finally:
+        try:
+            cm.__exit__(None, None, None)
+        except Exception:  # noqa: BLE001
+            logger.warning("Langfuse observation close failed", exc_info=True)
 
 
 def current_trace_id() -> str | None:
