@@ -46,12 +46,22 @@ def _client():
 
     if not settings.openai_api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY is empty. Set it in .env (a free Google AI Studio key "
-            "works with OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/)."
+            "OPENAI_API_KEY is empty. Set it in .env (a free Groq key works with "
+            "OPENAI_BASE_URL=https://api.groq.com/openai/v1)."
+        )
+    if not settings.openai_base_url:
+        # Cost guard: an empty base_url lets the OpenAI SDK default to the paid
+        # api.openai.com. Require an explicit (free) endpoint so the project can
+        # never silently bill. Point at Groq/Gemini/Ollama via .env.
+        raise RuntimeError(
+            "OPENAI_BASE_URL is empty. Set it to a free OpenAI-compatible endpoint "
+            "(e.g. https://api.groq.com/openai/v1) to avoid accidentally billing "
+            "api.openai.com. To intentionally use paid OpenAI, set it to "
+            "https://api.openai.com/v1 explicitly."
         )
     return OpenAI(
         api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url or None,
+        base_url=settings.openai_base_url,
     )
 
 
