@@ -63,15 +63,22 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     return min(2.0 ** attempt, 60.0)
 
 
+def _is_rate_limited(exc: Exception) -> bool:
+    """True for 429s and Groq's 413 tokens-per-minute rate-limit (both clear by waiting)."""
+    if type(exc).__name__ == "RateLimitError":
+        return True
+    code = getattr(exc, "status_code", None)
+    return code == 413 and "rate_limit" in str(exc).lower()
+
+
 def _create_with_backoff(kwargs: dict[str, Any]):
-    """Call the API, retrying on rate-limit (429) errors with backoff."""
+    """Call the API, retrying on rate-limit errors with backoff."""
     client = _client()
     for attempt in range(MAX_RETRIES + 1):
         try:
             return client.chat.completions.create(**kwargs)
         except Exception as exc:  # noqa: BLE001 - re-raised below unless retryable
-            retryable = type(exc).__name__ == "RateLimitError"
-            if not retryable or attempt == MAX_RETRIES:
+            if not _is_rate_limited(exc) or attempt == MAX_RETRIES:
                 raise
             time.sleep(_retry_delay(exc, attempt))
 

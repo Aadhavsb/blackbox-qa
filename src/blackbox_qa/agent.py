@@ -27,7 +27,7 @@ Tools:
 - fetch_full_report: pull one complete report by ev_id to confirm details after a search.
 
 Rules:
-- Ground every claim in tool results. Cite the ev_id(s) you relied on.
+- Ground every claim in tool results. Cite the ev_id(s) you relied on INLINE in the answer, e.g. "the report (ev_id 20080107X00027) describes...".
 - Prefer sql_query for "how many / which / list" questions; hybrid_search for narrative questions.
 - When you have enough evidence, stop calling tools and write the final answer.
 - End the final answer with a line exactly "CONFIDENCE: high" or "CONFIDENCE: low" (low if the tools did not yield enough evidence)."""
@@ -91,10 +91,17 @@ def _strip_confidence(text: str) -> str:
 
 
 def _citations(answer: str, tool_log: list[dict[str, Any]]) -> list[str]:
+    """ev_ids the answer relied on: those named in the prose, plus any report the
+    agent actually pulled via fetch_full_report (its grounding sources)."""
     seen: list[str] = []
     for ev in _EV_ID_RE.findall(answer or ""):
         if ev not in seen:
             seen.append(ev)
+    for entry in tool_log:
+        if entry.get("tool") == "fetch_full_report" and entry.get("ok"):
+            ev = (entry.get("args") or {}).get("ev_id")
+            if ev and ev not in seen:
+                seen.append(ev)
     return seen
 
 

@@ -54,7 +54,7 @@ make serve        # FastAPI app
 poetry run blackbox-qa "your question here"
 ```
 
-Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest. The agent needs an OpenAI-compatible LLM — copy `.env.example` to `.env` and add a (free) [Google AI Studio](https://aistudio.google.com/apikey) key; embeddings and the reranker run locally on CPU.
+Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest. The agent needs an OpenAI-compatible LLM — copy `.env.example` to `.env` and add a (free) [Groq](https://console.groq.com) key (recommended; or Gemini/Ollama — any OpenAI-compatible endpoint works via env vars). The agent and judge use different models. Embeddings and the reranker run locally on CPU.
 
 ### The agent
 
