@@ -13,7 +13,8 @@ def recall_at_k(retrieved: Sequence[str], relevant: set[str], k: int) -> float:
     """
     if not relevant:
         raise ValueError("relevant set must be non-empty")
-    found = sum(1 for item in retrieved[:k] if item in relevant)
+    # Dedupe the top-k: duplicate retrieved ids must not inflate recall past 1.0.
+    found = len(set(retrieved[:k]) & relevant)
     return found / len(relevant)
 
 
