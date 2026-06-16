@@ -104,7 +104,9 @@ services:
       retries: 10
 
   clickhouse:
-    image: docker.io/clickhouse/clickhouse-server
+    # Pinned to a 24.x LTS: Langfuse v3 supports ClickHouse >= 24.3, and newer
+    # majors (25/26) break its query planner ("Not found column" on scores).
+    image: docker.io/clickhouse/clickhouse-server:24.8
     profiles: ["observability"]
     restart: always
     user: "101:101"
