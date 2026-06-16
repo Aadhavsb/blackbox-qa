@@ -29,13 +29,28 @@ _FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 
+# Side-effect / info-disclosure functions that are valid *inside* a SELECT and
+# therefore slip past the keyword guard and the read-only transaction. The DB
+# role is also least-privilege, but block these explicitly (defense in depth).
+_FORBIDDEN_FUNCS = re.compile(
+    r"\b(pg_sleep|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|"
+    r"lo_import|lo_export|dblink\w*|pg_terminate_backend|pg_cancel_backend|"
+    r"pg_reload_conf|set_config|current_setting|pg_logical_emit_message|"
+    r"query_to_xml|copy_\w+)\s*\(",
+    re.IGNORECASE,
+)
+
 
 def validate_select(sql: str) -> str:
     """Return a cleaned single read-only SELECT, or raise ToolError.
 
     Pure + deterministic so it can be unit-tested without a database. This is
     the demonstrable safety boundary: defense-in-depth over the DB-level
-    read-only transaction in _run_select.
+    read-only transaction in _run_select and the least-privilege DB role.
+
+    Note: this is allowlist-by-shape + denylist, not a full SQL parser. The
+    authoritative guarantees are the read-only transaction and the restricted
+    role; this layer makes intent explicit and catches the obvious abuses.
     """
     if not isinstance(sql, str):
         raise ToolError("sql must be a string")
@@ -49,6 +64,8 @@ def validate_select(sql: str) -> str:
         raise ToolError("only read-only SELECT (or WITH ... SELECT) queries are allowed")
     if _FORBIDDEN.search(cleaned):
         raise ToolError("query contains a forbidden keyword; only read-only SELECT is allowed")
+    if _FORBIDDEN_FUNCS.search(cleaned):
+        raise ToolError("query calls a disallowed function; only plain read-only SELECT is allowed")
     return cleaned
 
 
