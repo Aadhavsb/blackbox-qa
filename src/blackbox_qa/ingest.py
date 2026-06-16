@@ -25,7 +25,13 @@ from pathlib import Path
 from blackbox_qa import db
 
 DATA_DIR = Path(os.environ.get("BLACKBOX_DATA_DIR", "data"))
-AVALL_URL = os.environ.get("AVALL_URL", "https://data.ntsb.gov/avdata/avall.zip")
+# NTSB serves the dataset through a file-handler endpoint, not a static path.
+# fileID is the server-side Windows path, percent-encoded (C:\avdata\avall.zip).
+AVALL_URL = os.environ.get(
+    "AVALL_URL",
+    "https://data.ntsb.gov/avdata/FileDirectory/DownloadFile"
+    "?fileID=C%3A%5Cavdata%5Cavall.zip",
+)
 
 # NTSB column -> reports column. Pulled from the `events` table except where noted.
 _EVENT_COLS = {
