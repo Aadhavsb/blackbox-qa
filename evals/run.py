@@ -54,6 +54,54 @@ def run_retrieval(gold: list[dict], k: int, use_rerank: bool = False) -> dict:
     }
 
 
+def run_judge_slice(gold: list[dict], limit: int | None = None) -> dict:
+    """Run the agent end-to-end on a slice, score each answer, post scores by trace_id.
+
+    Two scores per question: `citation_match` (deterministic — did the agent cite a
+    gold ev_id?) and `answer_quality` (LLM-as-judge, 0..1). Both attach to the run's
+    Langfuse trace out-of-band via the Scores API.
+    """
+    from blackbox_qa import agent, judge, observability as obs
+
+    rows = gold[: limit] if limit else gold
+    results: list[dict] = []
+    for row in rows:
+        res = agent.run(row["query"])
+        gold_ids = _relevant(row)
+        cited = set(res.citations)
+        citation_match = 1 if (cited & gold_ids) else 0
+        quality, reason = judge.judge_answer(row["query"], res.answer)
+        if res.trace_id:
+            obs.score(
+                "citation_match",
+                citation_match,
+                trace_id=res.trace_id,
+                data_type="BOOLEAN",
+                comment=f"gold={sorted(gold_ids)} cited={sorted(cited)}",
+            )
+            obs.score(
+                "answer_quality", quality, trace_id=res.trace_id, data_type="NUMERIC", comment=reason
+            )
+        results.append(
+            {
+                "query": row["query"],
+                "citation_match": citation_match,
+                "answer_quality": quality,
+                "confidence": res.confidence,
+                "trace_id": res.trace_id,
+            }
+        )
+    obs.flush()
+    return {
+        "summary": {
+            "n": len(results),
+            "citation_match_rate": round(metrics.mean([r["citation_match"] for r in results]), 4),
+            "answer_quality_mean": round(metrics.mean([r["answer_quality"] for r in results]), 4),
+        },
+        "results": results,
+    }
+
+
 def run_ablation(gold: list[dict], k: int) -> dict:
     """Hybrid vs. hybrid+rerank on the same gold set."""
     base = run_retrieval(gold, k, use_rerank=False)
@@ -79,10 +127,11 @@ def main() -> int:
     parser.add_argument("--ablation", action="store_true", help="compare hybrid vs hybrid+rerank")
     parser.add_argument("--baseline", type=Path, default=None, help="baseline results JSON")
     parser.add_argument("--max-drop", type=float, default=0.01, help="allowed Recall@k drop")
+    parser.add_argument("--limit", type=int, default=None, help="cap rows (judge-slice)")
     args = parser.parse_args()
 
-    if args.mode != "retrieval":
-        print(f"mode {args.mode!r} not implemented yet (phase 5).")
+    if args.mode == "full":
+        print("mode 'full' not implemented yet (phase 5).")
         return 0
     if not args.gold.exists():
         raise SystemExit(
@@ -91,6 +140,9 @@ def main() -> int:
         )
 
     gold = load_gold(args.gold)
+    if args.mode == "judge-slice":
+        print(json.dumps(run_judge_slice(gold, limit=args.limit), indent=2))
+        return 0
     if args.ablation:
         print(json.dumps(run_ablation(gold, args.k), indent=2))
         return 0

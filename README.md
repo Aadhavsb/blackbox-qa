@@ -58,7 +58,15 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 ### The agent
 
-A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns), validates tool arguments and feeds errors back for self-correction, forces a text answer on the final turn (`tool_choice="none"`), and does one confidence-triggered query-rewrite retry. The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML) plus a DB-level read-only transaction.
+A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns), validates tool arguments and feeds errors back for self-correction, forces a text answer on the final turn (`tool_choice="none"`), and does one confidence-triggered query-rewrite retry. The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML) plus a DB-level read-only transaction. The LLM client retries on rate-limit (429) with server-suggested backoff.
+
+### Observability (optional)
+
+Self-hosted Langfuse, behind a Compose profile (`docker compose --profile observability up`): each agent run is a trace, with a generation per LLM turn (token usage → cost) and a span per tool call. Quality is scored out-of-band and attached to the run's trace by `trace_id` via the Scores API — a deterministic `citation_match` (did it cite a gold `ev_id`?) and an LLM-as-judge `answer_quality` (0–1). Tracing is async/batched so it adds no latency to the request; when `LANGFUSE_ENABLED=false` (default) all of it is a no-op. Run the judge-scored slice with:
+
+```bash
+poetry run python -m evals.run --mode judge-slice --limit 5
+```
 
 ## Results
 
@@ -82,9 +90,10 @@ Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.
 1. Ingest + hybrid retrieval + gold set (Recall@5 / MRR measured) ✅
 2. (1.5) Cross-encoder rerank stage, reported as ablation numbers ✅
 3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry ✅
-4. Langfuse tracing + judge scores via Scores API
+4. Langfuse tracing + judge scores via Scores API ✅
 5. CI eval pipeline (GitHub Actions + pgvector service container, manually triggered)
-6. README as engineering doc — measured numbers, failure modes, "at 100x scale"
+6. Deploy heavy components (Langfuse, embeddings, reranker, Postgres) to a VM / EC2
+7. README as engineering doc — measured numbers, failure modes, "at 100x scale"
 
 ## License
 

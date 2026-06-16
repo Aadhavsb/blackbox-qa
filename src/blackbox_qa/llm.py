@@ -9,9 +9,14 @@ no API key, and zero tokens spent.
 
 from __future__ import annotations
 
+import re
+import time
 from dataclasses import dataclass
 from functools import cache
 from typing import Any
+
+MAX_RETRIES = 5
+_RETRY_HINT_RE = re.compile(r"retry in ([\d.]+)s", re.IGNORECASE)
 
 
 @dataclass
@@ -25,6 +30,7 @@ class ToolCall:
 class LLMResponse:
     content: str | None
     tool_calls: list[ToolCall]
+    usage: dict[str, int] | None = None  # prompt/completion/total tokens, if reported
 
     @property
     def wants_tool(self) -> bool:
@@ -47,6 +53,27 @@ def _client():
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url or None,
     )
+
+
+def _retry_delay(exc: Exception, attempt: int) -> float:
+    """Prefer the server's suggested delay; else exponential backoff. Capped at 65s."""
+    m = _RETRY_HINT_RE.search(str(exc))
+    if m:
+        return min(float(m.group(1)) + 1.0, 65.0)
+    return min(2.0 ** attempt, 60.0)
+
+
+def _create_with_backoff(kwargs: dict[str, Any]):
+    """Call the API, retrying on rate-limit (429) errors with backoff."""
+    client = _client()
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - re-raised below unless retryable
+            retryable = type(exc).__name__ == "RateLimitError"
+            if not retryable or attempt == MAX_RETRIES:
+                raise
+            time.sleep(_retry_delay(exc, attempt))
 
 
 def chat(
@@ -72,10 +99,17 @@ def chat(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
 
-    resp = _client().chat.completions.create(**kwargs)
+    resp = _create_with_backoff(kwargs)
     msg = resp.choices[0].message
     calls = [
         ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments)
         for tc in (msg.tool_calls or [])
     ]
-    return LLMResponse(content=msg.content, tool_calls=calls)
+    usage = None
+    if resp.usage is not None:
+        usage = {
+            "input": resp.usage.prompt_tokens,
+            "output": resp.usage.completion_tokens,
+            "total": resp.usage.total_tokens,
+        }
+    return LLMResponse(content=msg.content, tool_calls=calls, usage=usage)
