@@ -1,8 +1,10 @@
-"""Command-line entry point. Wired up in phase 3 (agent loop)."""
+"""Command-line front door: parse a question, run the agent, print the answer."""
 
 from __future__ import annotations
 
 import sys
+
+from blackbox_qa import agent
 
 
 def main() -> int:
@@ -10,7 +12,11 @@ def main() -> int:
         print('usage: blackbox-qa "your question here"', file=sys.stderr)
         return 2
     question = " ".join(sys.argv[1:])
-    print(f"[not yet implemented] would answer: {question!r}")
+    result = agent.run(question)
+    print(result.answer)
+    if result.citations:
+        print("\nsources: " + ", ".join(result.citations))
+    print(f"\n[turns={result.turns} confidence={result.confidence}]", file=sys.stderr)
     return 0
 
 

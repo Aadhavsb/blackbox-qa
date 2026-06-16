@@ -26,7 +26,7 @@ ingest:
 	poetry run python -m blackbox_qa.ingest
 
 serve:
-	poetry run uvicorn blackbox_qa.app:app --reload --port 8000
+	poetry run uvicorn blackbox_qa.api:app --reload --port 8000
 
 eval:
 	poetry run python -m evals.run --mode retrieval

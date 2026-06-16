@@ -54,7 +54,11 @@ make serve        # FastAPI app
 poetry run blackbox-qa "your question here"
 ```
 
-Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest.
+Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) for ingest. The agent needs an OpenAI-compatible LLM — copy `.env.example` to `.env` and add a (free) [Google AI Studio](https://aistudio.google.com/apikey) key; embeddings and the reranker run locally on CPU.
+
+### The agent
+
+A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns), validates tool arguments and feeds errors back for self-correction, forces a text answer on the final turn (`tool_choice="none"`), and does one confidence-triggered query-rewrite retry. The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML) plus a DB-level read-only transaction.
 
 ## Results
 
@@ -77,7 +81,7 @@ Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.
 
 1. Ingest + hybrid retrieval + gold set (Recall@5 / MRR measured) ✅
 2. (1.5) Cross-encoder rerank stage, reported as ablation numbers ✅
-3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry
+3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry ✅
 4. Langfuse tracing + judge scores via Scores API
 5. CI eval pipeline (GitHub Actions + pgvector service container, manually triggered)
 6. README as engineering doc — measured numbers, failure modes, "at 100x scale"
