@@ -18,6 +18,7 @@ from blackbox_qa.config import settings
 
 MAX_TURNS = 8
 MAX_RETRIES = 1
+MAX_TOOL_CALLS = 16  # hard ceiling on total tool executions per run (latency/cost guard)
 
 SYSTEM_PROMPT = """You are an aviation-safety analyst answering questions about NTSB accident reports.
 
@@ -76,6 +77,11 @@ def _exec_tool(call: llm.ToolCall, tool_log: list[dict[str, Any]]) -> str:
         except tools.ToolError as exc:
             result = f"ERROR: {exc}"
             tool_log.append({"tool": call.name, "args": args, "error": str(exc)})
+        except Exception as exc:  # noqa: BLE001 - never let a tool failure crash the loop
+            # Unexpected runtime/DB error: surface a bounded message so the model
+            # can self-correct or answer with what it has, instead of 500ing.
+            result = f"ERROR: {call.name} failed ({type(exc).__name__}). Try a different approach."
+            tool_log.append({"tool": call.name, "args": args, "error": f"{type(exc).__name__}: {exc}"})
         if span is not None:
             span.update(output=result)
         return result
@@ -128,6 +134,7 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
     ]
     tool_log: list[dict[str, Any]] = []
     retries_left = max_retries
+    tool_calls_made = 0
 
     with obs.observation("agent.run", as_type="agent", input=question):
         trace_id = obs.current_trace_id()
@@ -140,12 +147,36 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
 
             if resp.wants_tool and not final_turn:
                 messages.append(_assistant_msg(resp))
+                # Every tool_call in the assistant message needs a matching tool
+                # reply, so once the budget is spent we answer the rest with an
+                # error rather than dropping them (which would break the protocol).
                 for call in resp.tool_calls:
-                    output = _exec_tool(call, tool_log)
+                    if tool_calls_made >= MAX_TOOL_CALLS:
+                        output = "ERROR: tool-call budget exhausted; answer now using the evidence already gathered."
+                        tool_log.append({"tool": call.name, "error": "tool budget exhausted"})
+                    else:
+                        output = _exec_tool(call, tool_log)
+                        tool_calls_made += 1
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
                 continue
 
             answer = resp.content or ""
+            # Final-turn repair: if tools are forbidden but the model still tried to
+            # call them (empty content), force one plain-text answer before giving up.
+            if final_turn and not answer.strip():
+                messages.append(_assistant_msg(resp))
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Do not call tools. Write your best final answer now in plain "
+                            "text, citing the ev_id(s) you relied on, and end with the "
+                            "CONFIDENCE line."
+                        ),
+                    }
+                )
+                resp = _chat(messages, turn, "none")
+                answer = resp.content or ""
             confidence = _confidence(answer)
 
             # One confidence-triggered retry: nudge a reformulation instead of giving up.
