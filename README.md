@@ -108,15 +108,7 @@ Things that are deliberately imperfect, and why — the honest version is more u
 
 ## At 100x scale
 
-What would change to run this at ~300k reports / ~1.4M chunks. The system was built so most of this is configuration, not a rewrite (every heavy component is already env-var-swappable and Compose-isolated).
-
-- **Vector retrieval.** HNSW is already approximate; tune `m` / `ef_construction` / `ef_search` for the recall-vs-latency point you want, partition the chunks table by year with per-partition indexes, and watch pgvector's index build time + RAM — past a point a dedicated vector store (or IVFFlat for cheaper builds) earns its keep.
-- **Reranking is the latency floor.** A cross-encoder is one forward pass per candidate on CPU. Cap the pool (rerank top-50, not top-200), batch on a GPU, or move it behind a served endpoint (e.g. TEI). The reranker and embedder are already separate, swappable models.
-- **Embeddings.** Batch + GPU for ingest; promote the local sentence-transformers model to a serving endpoint so ingest and query share one warm model (the `EMBEDDING_MODEL` indirection is already there).
-- **Database.** Connection pooling (pgbouncer), read replicas to absorb `sql_query` load, and materialized views for the common aggregations the agent asks for.
-- **Agent cost/latency.** Cache retrieval per normalized query, keep the tool-call ceiling (already 16), and stream the final answer.
-- **Observability.** Langfuse's ClickHouse backend handles high trace volume, but sample traces at high QPS and keep judge scoring out-of-band/async — which is already how it's wired.
-- **Eval.** The deterministic retrieval gate scales directly into a blocking PR check; the judge tiers stay sampled/scheduled because of cost and variance.
+At ~300x the data (~300k reports / ~1.4M chunks) the design holds because the heavy pieces are already isolated and swappable — scaling is mostly configuration, not a rewrite. The vector index is approximate ANN (HNSW, tunable `ef_search`); the embedder and cross-encoder are separate models behind env vars, so they move to a GPU/served endpoint by changing config; tracing is already async/batched with judge scoring out-of-band so observability adds no request latency; and the deterministic retrieval gate drops straight into a blocking PR check. The remaining knobs are standard ops, not redesign: bound the rerank pool, add connection pooling / read replicas for the SQL path, and partition the chunks table by year.
 
 ## Phases
 
