@@ -138,3 +138,75 @@ def test_empty_final_turn_is_repaired(monkeypatch):
     result = agent.run("q", max_turns=1)
     assert result.answer == "Best-effort answer."
     assert seen == ["none", "none"]  # final turn + repair, both tool-free
+
+
+# --- confidence gating on the retrieval score -----------------------------
+
+
+def test_top_retrieval_score_parsing():
+    assert agent._top_retrieval_score("[1] ev_id=x (score=-2.500)\n...") == -2.5
+    assert agent._top_retrieval_score("foo (score=3.140) bar") == 3.14
+    assert agent._top_retrieval_score("no score here") is None
+
+
+def _scored_dispatch(monkeypatch, scores):
+    """Make hybrid_search return outputs with the given top scores, in order."""
+    seq = iter(scores)
+
+    def fake_dispatch(name, args):
+        return f"[1] ev_id=20080101X00001 (score={next(seq):.3f})\nsnippet"
+
+    monkeypatch.setattr(agent.tools, "dispatch", fake_dispatch)
+
+
+def test_low_retrieval_score_triggers_retry(monkeypatch):
+    monkeypatch.setattr(agent.settings, "confidence_score_threshold", 0.0)
+    _scored_dispatch(monkeypatch, [-3.0, 5.0])  # weak evidence, then strong
+    _script(
+        monkeypatch,
+        [
+            _call("hybrid_search", '{"query": "a"}'),
+            _text("First try. CONFIDENCE: high"),  # model claims high...
+            _call("hybrid_search", '{"query": "b"}'),
+            _text("Second try. CONFIDENCE: high"),
+        ],
+    )
+    result = agent.run("q")
+    # ...but the weak top score (-3.0 < 0) forced a retry despite "high".
+    assert result.turns == 4
+    assert result.gate == "high"
+    assert result.retrieval_score == 5.0
+
+
+def test_strong_retrieval_score_overrides_verbalized_low(monkeypatch):
+    # Model says "low" but the evidence is strong: the gate must NOT waste a retry.
+    monkeypatch.setattr(agent.settings, "confidence_score_threshold", 0.0)
+    _scored_dispatch(monkeypatch, [4.0])
+    _script(
+        monkeypatch,
+        [
+            _call("hybrid_search", '{"query": "a"}'),
+            _text("Answer. CONFIDENCE: low"),
+        ],
+    )
+    result = agent.run("q")
+    assert result.turns == 2
+    assert result.confidence == "low"  # self-report preserved for comparison
+    assert result.gate == "high"  # retrieval score won
+    assert result.retrieval_score == 4.0
+
+
+def test_gate_falls_back_to_verbalized_without_search(monkeypatch):
+    # No hybrid_search ran (e.g. SQL-only), so there is no score to gate on.
+    monkeypatch.setattr(agent.settings, "confidence_score_threshold", 0.0)
+    _script(
+        monkeypatch,
+        [
+            _text("Unsure. CONFIDENCE: low"),
+            _text("Now sure. CONFIDENCE: high"),
+        ],
+    )
+    result = agent.run("q")
+    assert result.turns == 2  # verbalized "low" still drove the retry
+    assert result.retrieval_score is None
+    assert result.gate == "high"
