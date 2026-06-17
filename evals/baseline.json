@@ -1,7 +1,7 @@
 {
-  "n": 12,
-  "recall@5": 0.75,
-  "mrr": 0.6417,
-  "corpus": "NTSB 2008 slice (3000 reports, ~14k chunks)",
-  "note": "Phase 1 hybrid retrieval (dense bge-small + Postgres FTS, RRF). Regenerate with: poetry run python -m evals.run --mode retrieval --k 5"
+  "n": 25,
+  "recall@5": 0.88,
+  "mrr": 0.7513,
+  "corpus": "NTSB 2008-2009 slice (3000 reports, ~14k chunks)",
+  "note": "Hybrid retrieval (dense bge-small + Postgres FTS, RRF) over the 25-query gold set. Regenerate with: poetry run python -m evals.run --mode retrieval --k 5"
 }

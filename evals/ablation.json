@@ -1,19 +1,19 @@
 {
-  "n": 12,
+  "n": 25,
   "k": 5,
   "hybrid": {
-    "recall@5": 0.75,
-    "mrr": 0.6417
+    "recall@5": 0.88,
+    "mrr": 0.7513
   },
   "hybrid+rerank": {
-    "recall@5": 0.75,
-    "mrr": 0.75
+    "recall@5": 0.88,
+    "mrr": 0.88
   },
   "delta": {
     "recall@5": 0.0,
-    "mrr": 0.1083
+    "mrr": 0.1287
   },
   "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-  "corpus": "NTSB 2008 slice (3000 reports, ~14k chunks)",
+  "corpus": "NTSB 2008-2009 slice (3000 reports, ~14k chunks)",
   "note": "Rerank reorders the hybrid candidate pool; recall unchanged (no new docs), MRR up. Regenerate with: poetry run python -m evals.run --mode retrieval --ablation --k 5"
 }

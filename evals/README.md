@@ -22,7 +22,8 @@ python -m evals.run --mode calibrate --out evals/confidence_calibration.json
 - `metrics.py` — pure Recall@k / MRR (unit tested, no DB).
 - `run.py` — `--mode {retrieval,judge-slice,full,calibrate}`. With `--baseline`, a Recall@k drop beyond `--max-drop` exits non-zero, so the same script can back a blocking gate later.
   - `retrieval` — deterministic Recall@k / MRR (no LLM).
-  - `judge-slice` — runs the agent end-to-end on a slice and posts `citation_match` + `answer_quality` to Langfuse by trace_id (needs an LLM).
+  - `judge-slice` — runs the agent end-to-end on a subset (default 12 cases) and posts `citation_match` + `answer_quality` to Langfuse by trace_id (needs an LLM).
+  - `full` — same as `judge-slice` but over the **entire** gold set, using the same free judge model (no paid "frontier" judge — the project stays $0).
   - `calibrate` — measures each gold query's top rerank score + retrieval success and recommends the confidence-gate threshold (Youden's-J chooser); see `confidence_calibration.json`.
 
 ## CI fixture

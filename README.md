@@ -16,7 +16,7 @@ A natural-language question goes in (`"were there more engine failures on 737s o
   - `fetch_full_report` — pull a full report by ID
   - Weak-evidence answers trigger one bounded query-rewrite + re-retrieval retry, gated on the **cross-encoder retrieval score** (a calibrated signal) rather than the model's self-report.
 - **Observability**: every request traced in self-hosted **Langfuse** (optional Compose profile); LLM-as-judge scores posted back to the same traces via the Scores API.
-- **Evaluation**: a frozen gold set drives a **manually-triggered** GitHub Actions pipeline (parameterized run modes: deterministic Recall@k, a temp-0 judge slice, a full frontier-judge run). Architected to drop in as a merge-blocking retrieval-regression gate, but not currently wired as one.
+- **Evaluation**: a frozen 25-query gold set drives a **manually-triggered** GitHub Actions pipeline (parameterized run modes: deterministic Recall@k, a temp-0 judge slice, a full judged run over the whole gold set). Architected to drop in as a merge-blocking retrieval-regression gate, but not currently wired as one.
 - **`docker compose up`** runs the whole thing.
 
 ## Architecture
@@ -72,14 +72,14 @@ poetry run python -m evals.run --mode judge-slice --limit 5
 
 ## Results
 
-On a 2008 NTSB slice — 3,000 reports / ~14k narrative chunks, 12-query hand-curated gold set:
+On a 2008–2009 NTSB slice — 3,000 reports / ~14k narrative chunks, 25-query hand-curated gold set:
 
 | Stage | Recall@5 | MRR |
 |---|---|---|
-| Hybrid (dense + FTS, RRF) | 0.75 | 0.64 |
-| Hybrid + cross-encoder rerank | 0.75 | **0.75** |
+| Hybrid (dense + FTS, RRF) | 0.88 | 0.75 |
+| Hybrid + cross-encoder rerank | 0.88 | **0.88** |
 
-Reranking can't add documents the first stage missed, so Recall@5 is unchanged; it reorders the candidate pool, lifting the right report higher and improving **MRR +0.11 (~17% relative)**. Queries are paraphrased so this reflects retrieval quality, not memorization. Reproduce:
+Reranking can't add documents the first stage missed, so Recall@5 is unchanged; it reorders the candidate pool, lifting the right report higher and improving **MRR +0.13 (~17% relative)**. Queries are paraphrased so this reflects retrieval quality, not memorization. Reproduce:
 
 ```bash
 poetry run python -m evals.run --mode retrieval --ablation --k 5
