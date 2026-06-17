@@ -66,7 +66,7 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns + a total tool-call ceiling), validates tool arguments and feeds errors back for self-correction (unexpected tool failures are caught and returned, never crash the loop), and forces a text answer on the final turn (`tool_choice="none"`, with a repair step if the model still withholds text). The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML, and side-effect functions like `pg_sleep`/`pg_read_file`) plus a DB-level read-only transaction and a least-privilege role. The LLM client retries on rate-limit (429 / Groq 413 TPM) with server-suggested backoff.
 
-**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set with a Youden's-J sweep (`python -m evals.run --mode calibrate`): across 25 queries the 3 failed retrievals top out at 3.21 while successes mostly sit far higher (mean ≈ 7.6), so the gate sits at **4.42** — catching every failed retrieval (TPR 1.0) at the cost of one needless retry on a genuinely-good answer (FPR 0.045). The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report. (Calibration is on a small sample — see [Failure modes](#failure-modes--limitations).)
+**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set with a Youden's-J sweep (`python -m evals.run --mode calibrate`): across 25 queries the 3 failed retrievals top out at 3.21 while successes mostly sit far higher (mean ≈ 7.6), so the gate sits at **4.42** — catching every failed retrieval (TPR 1.0) at the cost of one needless retry on a genuinely-good answer (FPR 0.045). The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report. (Calibration is on a small sample — n=25 with 3 failed retrievals — so treat 4.42 as a direction, not a tuned constant.)
 
 ### Observability (optional)
 
@@ -94,17 +94,6 @@ poetry run python -m evals.run --mode retrieval --ablation --k 5
 ```
 
 Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.json`.
-
-## Failure modes & limitations
-
-Things that are deliberately imperfect, and why — the honest version is more useful than a clean one.
-
-- **`citation_match` understates the agent.** The retrieval gold maps each query to a single hand-picked `ev_id`, but the agent frequently cites a *different, equally valid* incident. So `citation_match` reads lower than the answer actually deserves — it's really a retrieval signal. `answer_quality` (the judge score) is the better agent-level metric.
-- **Rerank can't recover what the first stage missed.** Recall@5 is capped by hybrid retrieval (0.88); the cross-encoder only reorders the existing candidate pool. The misses are paraphrase-heavy queries where neither BM25 nor dense surfaced the report into the pool — e.g. *"747 lost all four generator control units"* scored a top rerank of −0.73, well below anything relevant.
-- **The confidence gate is calibrated on a small sample.** n=25, with only 3 failed retrievals. The threshold (4.42) separates them cleanly *here*, but that margin is partly luck — it's a direction, not a tuned constant. It also misfires occasionally: one genuinely-good answer scored −0.52 and would trigger an unnecessary retry (FPR 0.045).
-- **SQL-only answers fall back to the weaker signal.** When the agent answers purely from `sql_query` aggregates (no `hybrid_search` ran), there's no rerank score to gate on, so it reverts to the model's self-reported confidence.
-- **Free-tier rate limits shape the design.** Groq's per-model TPM caps (agent context grows every turn) drove the model choice and the 429/413 backoff. The judge CI tiers are intentionally manual rather than per-PR — both for cost and because judge scores have variance.
-- **The corpus is a 2-year slice.** 2008–2009 (~3k reports) keeps local builds fast and reproducible; it is not the full 1982–present dataset.
 
 ## At 100x scale
 
