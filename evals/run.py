@@ -2,8 +2,8 @@
 
 Modes (matching the CI workflow's `mode` input):
   retrieval   - deterministic Recall@k / MRR over the gold set (no LLM). Default.
-  judge-slice - small temp-0 judge-scored end-to-end slice (added in phase 5).
-  full        - full frontier-judge run (added in phase 5).
+  judge-slice - small temp-0 judge-scored end-to-end slice (default 12 cases).
+  full        - judge-scored run over the ENTIRE gold set (same free judge model).
   calibrate   - choose the confidence-gate threshold from the gold set (no LLM).
 
 Exit code is non-zero when a baseline is supplied and Recall@k regresses beyond
@@ -219,9 +219,6 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=None, help="write result JSON here (calibrate)")
     args = parser.parse_args()
 
-    if args.mode == "full":
-        print("mode 'full' not implemented yet (phase 5).")
-        return 0
     if not args.gold.exists():
         raise SystemExit(
             f"gold set not found: {args.gold}\n"
@@ -237,6 +234,13 @@ def main() -> int:
             print(f"wrote {args.out}")
         return 0
     if args.mode == "judge-slice":
+        # A subset for a quick signal; default 12 cases unless --limit overrides.
+        limit = args.limit if args.limit is not None else 12
+        print(json.dumps(run_judge_slice(gold, limit=limit), indent=2))
+        return 0
+    if args.mode == "full":
+        # Full judged run over the ENTIRE gold set, using the same (free) judge
+        # model as the slice. --limit still caps it if given.
         print(json.dumps(run_judge_slice(gold, limit=args.limit), indent=2))
         return 0
     if args.ablation:
