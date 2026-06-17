@@ -130,7 +130,7 @@ What would change to run this at ~300k reports / ~1.4M chunks. The system was bu
 4. Langfuse tracing + judge scores via Scores API ✅
 5. CI eval pipeline (GitHub Actions + pgvector service container, fixture-seeded, Recall@5 regression gate); calibrated retrieval-score confidence gate ✅
 6. Deploy heavy components (Langfuse, embeddings, reranker, Postgres) to a VM / EC2
-7. README as engineering doc — measured numbers, failure modes, "at 100x scale"
+7. README as engineering doc — architecture diagram, measured numbers, failure modes, "at 100x scale", Langfuse trace screenshots ✅
 
 ## License
 
