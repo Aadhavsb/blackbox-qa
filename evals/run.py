@@ -4,6 +4,7 @@ Modes (matching the CI workflow's `mode` input):
   retrieval   - deterministic Recall@k / MRR over the gold set (no LLM). Default.
   judge-slice - small temp-0 judge-scored end-to-end slice (added in phase 5).
   full        - full frontier-judge run (added in phase 5).
+  calibrate   - choose the confidence-gate threshold from the gold set (no LLM).
 
 Exit code is non-zero when a baseline is supplied and Recall@k regresses beyond
 the tolerance, so this script can later back a blocking PR gate unchanged.
@@ -102,6 +103,89 @@ def run_judge_slice(gold: list[dict], limit: int | None = None) -> dict:
     }
 
 
+def choose_threshold(scored: list[tuple[float, bool]]) -> dict:
+    """Pick a confidence-gate threshold from (top_score, retrieval_succeeded) pairs.
+
+    The gate fires (triggers a retry) when top_score < threshold, i.e. it is a
+    detector for *failed* retrievals. We sweep candidate cut points and maximise
+    Youden's J = TPR - FPR: catch as many failures as possible (TPR) while
+    rarely firing on successes (FPR, i.e. wasted retries). Pure / testable.
+    """
+    failures = [s for s, ok in scored if not ok]
+    successes = [s for s, ok in scored if ok]
+    all_scores = [s for s, _ in scored]
+    if not failures:
+        thr = (min(all_scores) - 1.0) if all_scores else 0.0
+        return {"threshold": round(thr, 4), "note": "no failed retrievals in gold; gate effectively off"}
+    if not successes:
+        return {"threshold": round(max(all_scores) + 1.0, 4), "note": "no successful retrievals in gold"}
+
+    uniq = sorted(set(all_scores))
+    candidates = [uniq[0] - 1.0] + [(a + b) / 2 for a, b in zip(uniq, uniq[1:])] + [uniq[-1] + 1.0]
+    best: dict | None = None
+    for thr in candidates:
+        tpr = sum(1 for s in failures if s < thr) / len(failures)
+        fpr = sum(1 for s in successes if s < thr) / len(successes)
+        cand = {
+            "threshold": round(thr, 4),
+            "tpr": round(tpr, 4),  # fraction of failures the gate catches
+            "fpr": round(fpr, 4),  # fraction of successes wastefully retried
+            "youden_j": round(tpr - fpr, 4),
+        }
+        if best is None or cand["youden_j"] > best["youden_j"] or (
+            cand["youden_j"] == best["youden_j"] and cand["fpr"] < best["fpr"]
+        ):
+            best = cand
+    assert best is not None
+    return best
+
+
+def _score_stats(vals: list[float]) -> dict:
+    if not vals:
+        return {"n": 0}
+    return {
+        "n": len(vals),
+        "min": round(min(vals), 4),
+        "max": round(max(vals), 4),
+        "mean": round(metrics.mean(vals), 4),
+    }
+
+
+def run_calibrate(gold: list[dict], k: int, candidates: int = 50) -> dict:
+    """Measure each gold query's top rerank score + whether retrieval succeeded,
+    then recommend a confidence-gate threshold. No LLM calls."""
+    from blackbox_qa.rerank import rerank_hits
+    from blackbox_qa.retrieval import hybrid_search
+
+    per: list[dict] = []
+    for row in gold:
+        relevant = _relevant(row)
+        pool = hybrid_search(row["query"], top_k=candidates, candidates=candidates)
+        ranked = rerank_hits(row["query"], pool)
+        top_score = float(ranked[0].score) if ranked else None
+        ev_order: list[str] = []
+        for h in ranked:
+            if h.ev_id not in ev_order:
+                ev_order.append(h.ev_id)
+        success = bool(relevant & set(ev_order[:k]))
+        per.append(
+            {
+                "query": row["query"],
+                "top_score": round(top_score, 4) if top_score is not None else None,
+                "success": success,
+            }
+        )
+    scored = [(p["top_score"], p["success"]) for p in per if p["top_score"] is not None]
+    return {
+        "n": len(per),
+        "k": k,
+        "recommended_threshold": choose_threshold(scored),
+        "success_scores": _score_stats([s for s, ok in scored if ok]),
+        "failure_scores": _score_stats([s for s, ok in scored if not ok]),
+        "per_query": per,
+    }
+
+
 def run_ablation(gold: list[dict], k: int) -> dict:
     """Hybrid vs. hybrid+rerank on the same gold set."""
     base = run_retrieval(gold, k, use_rerank=False)
@@ -120,7 +204,11 @@ def run_ablation(gold: list[dict], k: int) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="blackbox-qa eval runner")
-    parser.add_argument("--mode", choices=("retrieval", "judge-slice", "full"), default="retrieval")
+    parser.add_argument(
+        "--mode",
+        choices=("retrieval", "judge-slice", "full", "calibrate"),
+        default="retrieval",
+    )
     parser.add_argument("--gold", type=Path, default=DEFAULT_GOLD)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--rerank", action="store_true", help="add cross-encoder rerank stage")
@@ -128,6 +216,7 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, default=None, help="baseline results JSON")
     parser.add_argument("--max-drop", type=float, default=0.01, help="allowed Recall@k drop")
     parser.add_argument("--limit", type=int, default=None, help="cap rows (judge-slice)")
+    parser.add_argument("--out", type=Path, default=None, help="write result JSON here (calibrate)")
     args = parser.parse_args()
 
     if args.mode == "full":
@@ -140,6 +229,13 @@ def main() -> int:
         )
 
     gold = load_gold(args.gold)
+    if args.mode == "calibrate":
+        result = run_calibrate(gold, args.k)
+        print(json.dumps(result, indent=2))
+        if args.out:
+            args.out.write_text(json.dumps(result, indent=2) + "\n")
+            print(f"wrote {args.out}")
+        return 0
     if args.mode == "judge-slice":
         print(json.dumps(run_judge_slice(gold, limit=args.limit), indent=2))
         return 0

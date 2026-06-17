@@ -22,8 +22,10 @@ class Settings(BaseSettings):
     # Confidence gate: the agent retries (reformulate + re-search) when the top
     # cross-encoder rerank score of its evidence is below this threshold. A
     # better-calibrated signal than the model's self-reported CONFIDENCE line.
-    # Calibrated against the gold set via `python -m evals.run --mode calibrate`.
-    confidence_score_threshold: float = 0.0
+    # Calibrated via `python -m evals.run --mode calibrate`: on the n=12 gold set
+    # failed retrievals scored <= 3.21 and successes >= 5.80 (cleanly separable),
+    # so 4.5 sits in the gap (TPR 1.0, FPR 0.0). See evals/confidence_calibration.json.
+    confidence_score_threshold: float = 4.5
 
     langfuse_enabled: bool = False
     langfuse_host: str | None = None
