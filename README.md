@@ -1,4 +1,4 @@
-# blackbox-qa
+# blackbox-qa.
 
 Agentic question-answering over public **NTSB aviation incident reports**.
 
