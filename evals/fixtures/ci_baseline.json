@@ -1,0 +1,6 @@
+{
+  "n": 12,
+  "recall@5": 1.0,
+  "mrr": 0.9028,
+  "_note": "Measured on the committed seed.sql fixture (12 gold + 60 distractors), NOT the full corpus. The CI retrieval gate compares against this. Full-corpus numbers live in evals/baseline.json."
+}
