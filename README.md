@@ -16,7 +16,7 @@ A natural-language question goes in (`"were there more engine failures on 737s o
   - `fetch_full_report` — pull a full report by ID
   - Weak-evidence answers trigger one bounded query-rewrite + re-retrieval retry, gated on the **cross-encoder retrieval score** (a calibrated signal) rather than the model's self-report.
 - **Observability**: every request traced in self-hosted **Langfuse** (optional Compose profile); LLM-as-judge scores posted back to the same traces via the Scores API.
-- **Evaluation**: a frozen 25-query gold set drives a **manually-triggered** GitHub Actions pipeline (parameterized run modes: deterministic Recall@k, a temp-0 judge slice, a full judged run over the whole gold set). Architected to drop in as a merge-blocking retrieval-regression gate, but not currently wired as one.
+- **Evaluation**: a frozen 25-query gold set drives a GitHub Actions pipeline with two triggers: a **Recall@5 regression gate on every PR** (deterministic, free, fast), and a manually-triggered mode for the LLM-as-judge tiers (slice and full).
 - **`docker compose up`** runs the whole thing.
 
 ## Architecture
@@ -43,7 +43,7 @@ scores (answer_quality · citation_match) on the same trace   (optional)
 
 ## Data
 
-NTSB aviation accident data (1982–present) from <https://data.ntsb.gov/avdata/> — distributed as a Microsoft Access `.mdb` inside `avall.zip`. **Raw data is never committed.** `make ingest` downloads it and converts it to Postgres via `mdbtools`. Only the frozen gold set and a small (~20-report) CI fixture are committed.
+NTSB aviation accident data (1982–present) from <https://data.ntsb.gov/avdata/> — distributed as a Microsoft Access `.mdb` inside `avall.zip`. **Raw data is never committed.** `make ingest` downloads it and converts it to Postgres via `mdbtools`. Only the frozen gold set and a small (85-report: 25 gold + 60 distractors) CI fixture are committed.
 
 ## Quickstart
 
@@ -84,16 +84,30 @@ On a 2008–2009 NTSB slice — 3,000 reports / ~14k narrative chunks, 25-query 
 
 | Stage | Recall@5 | MRR |
 |---|---|---|
-| Hybrid (dense + FTS, RRF) | 0.88 | 0.75 |
-| Hybrid + cross-encoder rerank | 0.88 | **0.88** |
+| BM25 keyword-only (naive baseline) | 0.04 | 0.04 |
+| Hybrid (dense + BM25, RRF) | 0.88 | 0.75 |
+| Hybrid + cross-encoder rerank | **0.88** | **0.88** |
 
-Reranking can't add documents the first stage missed, so Recall@5 is unchanged; it reorders the candidate pool, lifting the right report higher and improving **MRR +0.13 (~17% relative)**. Queries are paraphrased so this reflects retrieval quality, not memorization. Reproduce:
+BM25 alone nearly fails on this corpus (Recall@5 0.04) because the gold queries are paraphrased — exact-keyword matching breaks against natural-language reformulations. Adding dense vectors via RRF lifts Recall@5 to 0.88 (**+22× relative**). Reranking can't add documents the first stage missed, so Recall@5 holds; it reorders the pool, improving MRR by +0.13 (~17% relative). Reproduce:
 
 ```bash
-poetry run python -m evals.run --mode retrieval --ablation --k 5
+poetry run python -m evals.run --ablation --k 5
 ```
 
-Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.json`.
+Baselines committed at `evals/baseline.json` and `evals/ablation.json`.
+
+**End-to-end answer quality** (full 25-query gold set, LLM-as-judge, `evals/answers.json`):
+
+| Metric | Score |
+|---|---|
+| `citation_match` rate | 0.84 |
+| `answer_quality` mean | 0.856 |
+
+`citation_match` is a lower bound — it fires only when the agent cites the exact gold `ev_id`; answers citing a different valid incident score 0 even when correct. `answer_quality` is a 0–1 judge score assessing answer accuracy and grounding. Reproduce:
+
+```bash
+poetry run python -m evals.run --mode full
+```
 
 ## At 100x scale
 
@@ -105,7 +119,7 @@ At ~300x the data (~300k reports / ~1.4M chunks) the design holds because the he
 2. (1.5) Cross-encoder rerank stage, reported as ablation numbers ✅
 3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry ✅
 4. Langfuse tracing + judge scores via Scores API ✅
-5. CI eval pipeline (GitHub Actions + pgvector service container, fixture-seeded, Recall@5 regression gate); calibrated retrieval-score confidence gate ✅
+5. CI eval pipeline — Recall@5 regression gate on every PR + manually-triggered judge tiers; calibrated retrieval-score confidence gate ✅
 6. Deploy heavy components (Langfuse, embeddings, reranker, Postgres) to a VM / EC2
 7. README as engineering doc — architecture diagram, measured numbers, failure modes, "at 100x scale", Langfuse trace screenshots ✅
 

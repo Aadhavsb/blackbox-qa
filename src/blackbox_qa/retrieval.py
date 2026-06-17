@@ -77,18 +77,27 @@ def hybrid_search(query: str, top_k: int = 5, candidates: int = 50) -> list[Hit]
 
 
 def search_reports(
-    query: str, top_k: int = 5, candidates: int = 50, use_rerank: bool = False
+    query: str,
+    top_k: int = 5,
+    candidates: int = 50,
+    use_rerank: bool = False,
+    bm25_only: bool = False,
 ) -> list[str]:
     """Report-level results: distinct ev_ids in ranked order (for Recall@k).
 
     With use_rerank, the fused candidate pool is reordered by a cross-encoder
-    before being collapsed to reports.
+    before being collapsed to reports. With bm25_only, the keyword (FTS) stage
+    runs alone — the naive baseline the hybrid stack is meant to beat.
     """
-    hits = hybrid_search(query, top_k=candidates, candidates=candidates)
-    if use_rerank:
-        from blackbox_qa.rerank import rerank_hits
+    if bm25_only:
+        with db.connect() as conn:
+            hits = keyword_search(conn, query, candidates)
+    else:
+        hits = hybrid_search(query, top_k=candidates, candidates=candidates)
+        if use_rerank:
+            from blackbox_qa.rerank import rerank_hits
 
-        hits = rerank_hits(query, hits)
+            hits = rerank_hits(query, hits)
     seen: list[str] = []
     for h in hits:
         if h.ev_id not in seen:

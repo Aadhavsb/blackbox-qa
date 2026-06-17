@@ -20,7 +20,7 @@ from blackbox_qa import db
 
 GOLD = Path(__file__).resolve().parents[1] / "gold" / "retrieval_gold.jsonl"
 OUT = Path(__file__).resolve().parent / "seed.sql"
-N_DISTRACTORS = 60  # plus the 12 gold reports -> a non-trivial but tiny corpus
+N_DISTRACTORS = 60  # plus the 25 gold reports -> a non-trivial but tiny corpus
 EMB_DECIMALS = 6  # round embeddings to keep the committed fixture small (~no retrieval impact)
 
 REPORT_COLS = (

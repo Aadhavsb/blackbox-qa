@@ -37,7 +37,9 @@ def _relevant(row: dict) -> set[str]:
     return {row["ev_id"]}
 
 
-def run_retrieval(gold: list[dict], k: int, use_rerank: bool = False) -> dict:
+def run_retrieval(
+    gold: list[dict], k: int, use_rerank: bool = False, bm25_only: bool = False
+) -> dict:
     # Imported here so the heavy retrieval stack only loads for this mode.
     from blackbox_qa.retrieval import search_reports
 
@@ -45,7 +47,9 @@ def run_retrieval(gold: list[dict], k: int, use_rerank: bool = False) -> dict:
     rrs: list[float] = []
     for row in gold:
         relevant = _relevant(row)
-        retrieved = search_reports(row["query"], top_k=k, use_rerank=use_rerank)
+        retrieved = search_reports(
+            row["query"], top_k=k, use_rerank=use_rerank, bm25_only=bm25_only
+        )
         recalls.append(metrics.recall_at_k(retrieved, relevant, k))
         rrs.append(metrics.reciprocal_rank(retrieved, relevant))
     return {
@@ -67,7 +71,21 @@ def run_judge_slice(gold: list[dict], limit: int | None = None) -> dict:
     rows = gold[: limit] if limit else gold
     results: list[dict] = []
     for row in rows:
-        res = agent.run(row["query"])
+        try:
+            res = agent.run(row["query"])
+        except Exception as exc:
+            print(f"[judge-slice] agent error on {row['query']!r}: {exc}", flush=True)
+            results.append(
+                {
+                    "query": row["query"],
+                    "citation_match": 0,
+                    "answer_quality": 0.0,
+                    "confidence": "error",
+                    "trace_id": None,
+                    "error": str(exc),
+                }
+            )
+            continue
         gold_ids = _relevant(row)
         cited = set(res.citations)
         citation_match = 1 if (cited & gold_ids) else 0
@@ -187,17 +205,25 @@ def run_calibrate(gold: list[dict], k: int, candidates: int = 50) -> dict:
 
 
 def run_ablation(gold: list[dict], k: int) -> dict:
-    """Hybrid vs. hybrid+rerank on the same gold set."""
+    """BM25-only vs. hybrid vs. hybrid+rerank on the same gold set."""
+    bm25 = run_retrieval(gold, k, bm25_only=True)
     base = run_retrieval(gold, k, use_rerank=False)
     rerank = run_retrieval(gold, k, use_rerank=True)
     rk = f"recall@{k}"
     return {
         "n": len(gold),
+        "bm25": {rk: bm25[rk], "mrr": bm25["mrr"]},
         "hybrid": {rk: base[rk], "mrr": base["mrr"]},
         "hybrid+rerank": {rk: rerank[rk], "mrr": rerank["mrr"]},
         "delta": {
-            rk: round(rerank[rk] - base[rk], 4),
-            "mrr": round(rerank["mrr"] - base["mrr"], 4),
+            "bm25->hybrid": {
+                rk: round(base[rk] - bm25[rk], 4),
+                "mrr": round(base["mrr"] - bm25["mrr"], 4),
+            },
+            "hybrid->rerank": {
+                rk: round(rerank[rk] - base[rk], 4),
+                "mrr": round(rerank["mrr"] - base["mrr"], 4),
+            },
         },
     }
 
@@ -212,7 +238,10 @@ def main() -> int:
     parser.add_argument("--gold", type=Path, default=DEFAULT_GOLD)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--rerank", action="store_true", help="add cross-encoder rerank stage")
-    parser.add_argument("--ablation", action="store_true", help="compare hybrid vs hybrid+rerank")
+    parser.add_argument("--bm25-only", action="store_true", help="keyword (FTS) stage only — naive baseline")
+    parser.add_argument(
+        "--ablation", action="store_true", help="compare bm25-only vs hybrid vs hybrid+rerank"
+    )
     parser.add_argument("--baseline", type=Path, default=None, help="baseline results JSON")
     parser.add_argument("--max-drop", type=float, default=0.01, help="allowed Recall@k drop")
     parser.add_argument("--limit", type=int, default=None, help="cap rows (judge-slice)")
@@ -247,7 +276,7 @@ def main() -> int:
         print(json.dumps(run_ablation(gold, args.k), indent=2))
         return 0
 
-    result = run_retrieval(gold, args.k, use_rerank=args.rerank)
+    result = run_retrieval(gold, args.k, use_rerank=args.rerank, bm25_only=args.bm25_only)
     print(json.dumps(result, indent=2))
 
     if args.baseline and args.baseline.exists():

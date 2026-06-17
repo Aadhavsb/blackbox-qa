@@ -1,15 +1,17 @@
-# Manually-triggered eval pipeline (NOT a merge gate yet).
+# Eval pipeline — two triggers:
+#   pull_request: runs the deterministic retrieval tier only (free, fast, blocking).
+#   workflow_dispatch: choose any tier manually (retrieval / judge-slice / full).
 #
-# To make the deterministic tier a blocking PR gate later, add a trigger — no
-# change to the eval scripts is needed (that separation is the point):
-#   on:
-#     pull_request:
-#       paths: ["src/**", "sql/**", "evals/**", "pyproject.toml"]
-# ...then run only `--mode retrieval` on pull_request and require the check in
-# branch protection. The judge tiers stay manual/scheduled (cost + variance).
+# The judge tiers stay manual-only (cost + LLM variance; not appropriate as a per-PR gate).
 name: eval
 
 on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "sql/**"
+      - "evals/**"
+      - "pyproject.toml"
   workflow_dispatch:
     inputs:
       mode:
@@ -46,7 +48,7 @@ jobs:
       - run: pipx install poetry
       - run: poetry install
 
-      # Seed a hermetic corpus: schema + the committed fixture (12 gold + 60
+      # Seed a hermetic corpus: schema + the committed fixture (25 gold + 60
       # distractors with embeddings). No NTSB download, no corpus embedding.
       - name: Seed fixture into Postgres
         env:
@@ -55,7 +57,7 @@ jobs:
           psql -h localhost -U blackbox -d blackbox -v ON_ERROR_STOP=1 -q -f sql/schema.sql
           psql -h localhost -U blackbox -d blackbox -v ON_ERROR_STOP=1 -q -f evals/fixtures/seed.sql
 
-      - name: Run eval (${{ inputs.mode }})
+      - name: Run eval (${{ inputs.mode || 'retrieval' }})
         env:
           DATABASE_URL: postgresql://blackbox:blackbox@localhost:5432/blackbox
           # Only needed for the judge tiers; set as repo secrets (free Groq key).
@@ -64,7 +66,8 @@ jobs:
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           JUDGE_MODEL: ${{ secrets.JUDGE_MODEL }}
         run: |
-          case "${{ inputs.mode }}" in
+          MODE="${{ inputs.mode || 'retrieval' }}"
+          case "$MODE" in
             retrieval)
               # Deterministic gate: fail if Recall@5 regresses past tolerance.
               poetry run python -m evals.run --mode retrieval \

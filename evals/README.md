@@ -28,9 +28,9 @@ python -m evals.run --mode calibrate --out evals/confidence_calibration.json
 
 ## CI fixture
 
-`.github/workflows/eval.yml` is **manually triggered** (`workflow_dispatch`) and not a merge gate, but is architected to become one (uncomment the `pull_request` trigger — no script change).
+`.github/workflows/eval.yml` runs on **two triggers**: `pull_request` (deterministic retrieval tier only — fast, free, blocks on Recall@5 regression) and `workflow_dispatch` (choose any tier manually). The judge tiers stay manual-only because of LLM cost and score variance.
 
 CI runs against a small, deterministic, committed corpus instead of downloading/embedding NTSB data:
 
-- `fixtures/seed.sql` — 12 gold reports + 60 distractors (with chunks + rounded embeddings), regenerable from a populated local DB via `python -m evals.fixtures.build_fixture`.
+- `fixtures/seed.sql` — 25 gold reports + 60 distractors (with chunks + rounded embeddings), regenerable from a populated local DB via `python -m evals.fixtures.build_fixture`.
 - `fixtures/ci_baseline.json` — the fixture's own Recall@5 / MRR baseline (distinct from the full-corpus `baseline.json`); the CI retrieval gate compares against it.
