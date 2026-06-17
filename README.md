@@ -2,7 +2,7 @@
 
 Agentic question-answering over public **NTSB aviation incident reports**.
 
-> **Status: scaffolding / work in progress.** Concept and architecture are locked; build is in progress phase by phase. Each phase leaves the repo in a runnable state.
+> **Status: runs end-to-end.** Ingest → hybrid retrieval + rerank → tool-calling agent → self-hosted Langfuse tracing/scoring → a manually-triggered GitHub Actions eval pipeline are all built and green. Remaining work is a cloud deploy (phase 6) and doc polish (phase 7).
 
 ## What it is
 
@@ -21,18 +21,22 @@ A natural-language question goes in (`"were there more engine failures on 737s o
 
 ## Architecture
 
-```
-question
-   │
-   ▼
-┌─────────────┐   tool calls   ┌──────────────────────────────┐
-│ agent loop  │ ─────────────▶ │ hybrid_search │ sql_query │ … │
-│ (≤8 turns)  │ ◀───────────── │   (Postgres + pgvector)      │
-└─────────────┘   tool results └──────────────────────────────┘
-   │                                   ▲
-   │ grounded answer                   │ traces + scores
-   ▼                                   ▼
- client                          Langfuse (optional)
+```mermaid
+flowchart TD
+    Q([Question]) --> A["Agent loop<br/>(≤8 turns, ≤16 tool calls)"]
+    A -->|tool call| T{Which tool?}
+    T --> HS["hybrid_search<br/>BM25 + dense → RRF → cross-encoder rerank"]
+    T --> SQL["sql_query<br/>read-only SELECT, validated"]
+    T --> FR["fetch_full_report"]
+    HS --> PG[("Postgres + pgvector<br/>HNSW + tsvector")]
+    SQL --> PG
+    FR --> PG
+    PG -->|results| A
+    A -->|top rerank score &lt; threshold| RW["query rewrite + retry ×1"]
+    RW --> A
+    A --> ANS([grounded, cited answer])
+    A -. trace + token cost .-> LF[("Langfuse<br/>(optional)")]
+    JU["LLM-as-judge"] -. answer_quality + citation_match .-> LF
 ```
 
 ## Data
@@ -60,7 +64,7 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns + a total tool-call ceiling), validates tool arguments and feeds errors back for self-correction (unexpected tool failures are caught and returned, never crash the loop), and forces a text answer on the final turn (`tool_choice="none"`, with a repair step if the model still withholds text). The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML, and side-effect functions like `pg_sleep`/`pg_read_file`) plus a DB-level read-only transaction and a least-privilege role. The LLM client retries on rate-limit (429 / Groq 413 TPM) with server-suggested backoff.
 
-**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set (`python -m evals.run --mode calibrate`): failed and successful retrievals separate cleanly (failures ≤ 3.21, successes ≥ 5.80), so the gate sits at **4.5**. The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report.
+**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set with a Youden's-J sweep (`python -m evals.run --mode calibrate`): across 25 queries the 3 failed retrievals top out at 3.21 while successes mostly sit far higher (mean ≈ 7.6), so the gate sits at **4.42** — catching every failed retrieval (TPR 1.0) at the cost of one needless retry on a genuinely-good answer (FPR 0.045). The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report. The clean-looking margin is partly small-sample luck; treat 4.42 as a direction and re-calibrate as the gold set grows (`evals/confidence_calibration.json`).
 
 ### Observability (optional)
 
@@ -86,6 +90,29 @@ poetry run python -m evals.run --mode retrieval --ablation --k 5
 ```
 
 Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.json`.
+
+## Failure modes & limitations
+
+Things that are deliberately imperfect, and why — the honest version is more useful than a clean one.
+
+- **`citation_match` understates the agent.** The retrieval gold maps each query to a single hand-picked `ev_id`, but the agent frequently cites a *different, equally valid* incident. So `citation_match` reads lower than the answer actually deserves — it's really a retrieval signal. `answer_quality` (the judge score) is the better agent-level metric.
+- **Rerank can't recover what the first stage missed.** Recall@5 is capped by hybrid retrieval (0.88); the cross-encoder only reorders the existing candidate pool. The misses are paraphrase-heavy queries where neither BM25 nor dense surfaced the report into the pool — e.g. *"747 lost all four generator control units"* scored a top rerank of −0.73, well below anything relevant.
+- **The confidence gate is calibrated on a small sample.** n=25, with only 3 failed retrievals. The threshold (4.42) separates them cleanly *here*, but that margin is partly luck — it's a direction, not a tuned constant. It also misfires occasionally: one genuinely-good answer scored −0.52 and would trigger an unnecessary retry (FPR 0.045).
+- **SQL-only answers fall back to the weaker signal.** When the agent answers purely from `sql_query` aggregates (no `hybrid_search` ran), there's no rerank score to gate on, so it reverts to the model's self-reported confidence.
+- **Free-tier rate limits shape the design.** Groq's per-model TPM caps (agent context grows every turn) drove the model choice and the 429/413 backoff. The judge CI tiers are intentionally manual rather than per-PR — both for cost and because judge scores have variance.
+- **The corpus is a 2-year slice.** 2008–2009 (~3k reports) keeps local builds fast and reproducible; it is not the full 1982–present dataset.
+
+## At 100x scale
+
+What would change to run this at ~300k reports / ~1.4M chunks. The system was built so most of this is configuration, not a rewrite (every heavy component is already env-var-swappable and Compose-isolated).
+
+- **Vector retrieval.** HNSW is already approximate; tune `m` / `ef_construction` / `ef_search` for the recall-vs-latency point you want, partition the chunks table by year with per-partition indexes, and watch pgvector's index build time + RAM — past a point a dedicated vector store (or IVFFlat for cheaper builds) earns its keep.
+- **Reranking is the latency floor.** A cross-encoder is one forward pass per candidate on CPU. Cap the pool (rerank top-50, not top-200), batch on a GPU, or move it behind a served endpoint (e.g. TEI). The reranker and embedder are already separate, swappable models.
+- **Embeddings.** Batch + GPU for ingest; promote the local sentence-transformers model to a serving endpoint so ingest and query share one warm model (the `EMBEDDING_MODEL` indirection is already there).
+- **Database.** Connection pooling (pgbouncer), read replicas to absorb `sql_query` load, and materialized views for the common aggregations the agent asks for.
+- **Agent cost/latency.** Cache retrieval per normalized query, keep the tool-call ceiling (already 16), and stream the final answer.
+- **Observability.** Langfuse's ClickHouse backend handles high trace volume, but sample traces at high QPS and keep judge scoring out-of-band/async — which is already how it's wired.
+- **Eval.** The deterministic retrieval gate scales directly into a blocking PR check; the judge tiers stay sampled/scheduled because of cost and variance.
 
 ## Phases
 
