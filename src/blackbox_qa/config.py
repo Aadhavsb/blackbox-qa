@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+    # Confidence gate: the agent retries (reformulate + re-search) when the top
+    # cross-encoder rerank score of its evidence is below this threshold. A
+    # better-calibrated signal than the model's self-reported CONFIDENCE line.
+    # Calibrated against the gold set via `python -m evals.run --mode calibrate`.
+    confidence_score_threshold: float = 0.0
+
     langfuse_enabled: bool = False
     langfuse_host: str | None = None
     langfuse_public_key: str | None = None
