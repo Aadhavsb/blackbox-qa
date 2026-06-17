@@ -15,9 +15,21 @@ Populate it after ingest so the `ev_id`s point at real `reports.ev_id` values.
 python -m evals.run --mode retrieval --k 5
 # gate-style compare against a committed baseline:
 python -m evals.run --mode retrieval --baseline evals/baseline.json --max-drop 0.01
+# choose the confidence-gate threshold from the gold set (no LLM):
+python -m evals.run --mode calibrate --out evals/confidence_calibration.json
 ```
 
 - `metrics.py` — pure Recall@k / MRR (unit tested, no DB).
-- `run.py` — `--mode {retrieval,judge-slice,full}`. `retrieval` is deterministic and implemented; the judge modes arrive in phase 5. With `--baseline`, a Recall@k drop beyond `--max-drop` exits non-zero, so the same script can back a blocking gate later.
+- `run.py` — `--mode {retrieval,judge-slice,full,calibrate}`. With `--baseline`, a Recall@k drop beyond `--max-drop` exits non-zero, so the same script can back a blocking gate later.
+  - `retrieval` — deterministic Recall@k / MRR (no LLM).
+  - `judge-slice` — runs the agent end-to-end on a slice and posts `citation_match` + `answer_quality` to Langfuse by trace_id (needs an LLM).
+  - `calibrate` — measures each gold query's top rerank score + retrieval success and recommends the confidence-gate threshold (Youden's-J chooser); see `confidence_calibration.json`.
 
-The CI pipeline (`.github/workflows/eval.yml`) is **manually triggered** (`workflow_dispatch`) and not a merge gate, but is architected to become one (add a `pull_request` trigger).
+## CI fixture
+
+`.github/workflows/eval.yml` is **manually triggered** (`workflow_dispatch`) and not a merge gate, but is architected to become one (uncomment the `pull_request` trigger — no script change).
+
+CI runs against a small, deterministic, committed corpus instead of downloading/embedding NTSB data:
+
+- `fixtures/seed.sql` — 12 gold reports + 60 distractors (with chunks + rounded embeddings), regenerable from a populated local DB via `python -m evals.fixtures.build_fixture`.
+- `fixtures/ci_baseline.json` — the fixture's own Recall@5 / MRR baseline (distinct from the full-corpus `baseline.json`); the CI retrieval gate compares against it.

@@ -93,7 +93,7 @@ Baseline committed at `evals/baseline.json`, rerank ablation at `evals/ablation.
 2. (1.5) Cross-encoder rerank stage, reported as ablation numbers ✅
 3. Agent loop — 3 tools, bounded iterations, arg validation, confidence-retry ✅
 4. Langfuse tracing + judge scores via Scores API ✅
-5. CI eval pipeline (GitHub Actions + pgvector service container, manually triggered)
+5. CI eval pipeline (GitHub Actions + pgvector service container, fixture-seeded, Recall@5 regression gate); calibrated retrieval-score confidence gate ✅
 6. Deploy heavy components (Langfuse, embeddings, reranker, Postgres) to a VM / EC2
 7. README as engineering doc — measured numbers, failure modes, "at 100x scale"
 
