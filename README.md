@@ -74,6 +74,14 @@ Self-hosted Langfuse, behind a Compose profile (`docker compose --profile observ
 poetry run python -m evals.run --mode judge-slice --limit 5
 ```
 
+A real agent run, traced — the observation tree (a generation per turn + a span per tool call), token usage, and both judge scores attached to the **same** trace:
+
+![Langfuse trace of an agent run, with answer_quality 0.95 and citation_match on the same trace](docs/langfuse-trace.png)
+
+The confidence gate doing its job on a query the retriever can't satisfy (*"747 lost all four generator control units"*): weak evidence → low judge scores (`answer_quality 0.10`, `citation_match False`):
+
+![Langfuse trace of a low-confidence agent run scored 0.10](docs/langfuse-trace-lowconf.png)
+
 ## Results
 
 On a 2008–2009 NTSB slice — 3,000 reports / ~14k narrative chunks, 25-query hand-curated gold set:
