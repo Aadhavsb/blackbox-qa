@@ -1,5 +1,12 @@
-# Manually-triggered eval pipeline (NOT a merge gate — see evals/README.md).
-# Built so a `pull_request` trigger can be added later to make it blocking.
+# Manually-triggered eval pipeline (NOT a merge gate yet).
+#
+# To make the deterministic tier a blocking PR gate later, add a trigger — no
+# change to the eval scripts is needed (that separation is the point):
+#   on:
+#     pull_request:
+#       paths: ["src/**", "sql/**", "evals/**", "pyproject.toml"]
+# ...then run only `--mode retrieval` on pull_request and require the check in
+# branch protection. The judge tiers stay manual/scheduled (cost + variance).
 name: eval
 
 on:
@@ -10,9 +17,9 @@ on:
         type: choice
         default: retrieval
         options:
-          - retrieval
-          - judge-slice
-          - full
+          - retrieval # deterministic Recall@5 vs fixture baseline (free, blocking-ready)
+          - judge-slice # temp-0 LLM-as-judge slice (needs LLM secrets)
+          - full # full frontier-judge run (needs LLM secrets)
 
 jobs:
   eval:
@@ -38,6 +45,35 @@ jobs:
           python-version: "3.12"
       - run: pipx install poetry
       - run: poetry install
-      - run: poetry run python -m evals.run --mode "${{ inputs.mode }}"
+
+      # Seed a hermetic corpus: schema + the committed fixture (12 gold + 60
+      # distractors with embeddings). No NTSB download, no corpus embedding.
+      - name: Seed fixture into Postgres
+        env:
+          PGPASSWORD: blackbox
+        run: |
+          psql -h localhost -U blackbox -d blackbox -v ON_ERROR_STOP=1 -q -f sql/schema.sql
+          psql -h localhost -U blackbox -d blackbox -v ON_ERROR_STOP=1 -q -f evals/fixtures/seed.sql
+
+      - name: Run eval (${{ inputs.mode }})
         env:
           DATABASE_URL: postgresql://blackbox:blackbox@localhost:5432/blackbox
+          # Only needed for the judge tiers; set as repo secrets (free Groq key).
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          JUDGE_MODEL: ${{ secrets.JUDGE_MODEL }}
+        run: |
+          case "${{ inputs.mode }}" in
+            retrieval)
+              # Deterministic gate: fail if Recall@5 regresses past tolerance.
+              poetry run python -m evals.run --mode retrieval \
+                --baseline evals/fixtures/ci_baseline.json --max-drop 0.01
+              ;;
+            judge-slice)
+              poetry run python -m evals.run --mode judge-slice --limit 12
+              ;;
+            full)
+              poetry run python -m evals.run --mode full
+              ;;
+          esac
