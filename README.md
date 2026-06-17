@@ -14,7 +14,7 @@ A natural-language question goes in (`"were there more engine failures on 737s o
   - `hybrid_search` — retrieve relevant report chunks
   - `sql_query` — read-only aggregate queries over the structured fields
   - `fetch_full_report` — pull a full report by ID
-  - Low-confidence answers trigger one bounded query-rewrite + re-retrieval retry.
+  - Weak-evidence answers trigger one bounded query-rewrite + re-retrieval retry, gated on the **cross-encoder retrieval score** (a calibrated signal) rather than the model's self-report.
 - **Observability**: every request traced in self-hosted **Langfuse** (optional Compose profile); LLM-as-judge scores posted back to the same traces via the Scores API.
 - **Evaluation**: a frozen gold set drives a **manually-triggered** GitHub Actions pipeline (parameterized run modes: deterministic Recall@k, a temp-0 judge slice, a full frontier-judge run). Architected to drop in as a merge-blocking retrieval-regression gate, but not currently wired as one.
 - **`docker compose up`** runs the whole thing.
@@ -58,7 +58,9 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 ### The agent
 
-A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns), validates tool arguments and feeds errors back for self-correction, forces a text answer on the final turn (`tool_choice="none"`), and does one confidence-triggered query-rewrite retry. The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML) plus a DB-level read-only transaction. The LLM client retries on rate-limit (429) with server-suggested backoff.
+A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns + a total tool-call ceiling), validates tool arguments and feeds errors back for self-correction (unexpected tool failures are caught and returned, never crash the loop), and forces a text answer on the final turn (`tool_choice="none"`, with a repair step if the model still withholds text). The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML, and side-effect functions like `pg_sleep`/`pg_read_file`) plus a DB-level read-only transaction and a least-privilege role. The LLM client retries on rate-limit (429 / Groq 413 TPM) with server-suggested backoff.
+
+**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set (`python -m evals.run --mode calibrate`): failed and successful retrievals separate cleanly (failures ≤ 3.21, successes ≥ 5.80), so the gate sits at **4.5**. The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report.
 
 ### Observability (optional)
 

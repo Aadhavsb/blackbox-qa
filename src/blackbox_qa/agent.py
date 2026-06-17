@@ -35,6 +35,8 @@ Rules:
 
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE:\s*(high|low)", re.IGNORECASE)
 _EV_ID_RE = re.compile(r"\b\d{8}[A-Za-z]\d{5}\b")
+# Matches the top "(score=NN.NNN)" the hybrid_search tool prints for its #1 hit.
+_TOP_SCORE_RE = re.compile(r"score=(-?\d+\.\d+)")
 
 
 @dataclass
@@ -42,9 +44,11 @@ class AgentResult:
     answer: str
     citations: list[str]
     turns: int
-    confidence: str
+    confidence: str  # the model's self-reported CONFIDENCE line (kept for comparison)
     trace_id: str | None = None
     tool_log: list[dict[str, Any]] = field(default_factory=list)
+    retrieval_score: float | None = None  # best top rerank score seen (the gate signal)
+    gate: str = "high"  # the signal that actually drove the retry decision
 
 
 def _assistant_msg(resp: llm.LLMResponse) -> dict[str, Any]:
@@ -92,6 +96,17 @@ def _confidence(text: str) -> str:
     return m.group(1).lower() if m else "high"
 
 
+def _top_retrieval_score(output: str) -> float | None:
+    """The top hit's cross-encoder score from a hybrid_search tool result, if any.
+
+    This is the calibrated gate signal: a low top score means nothing relevant
+    was retrieved — a far more honest 'should I retry?' input than the model's
+    self-report, which tracks fluency, not evidence quality.
+    """
+    m = _TOP_SCORE_RE.search(output or "")
+    return float(m.group(1)) if m else None
+
+
 def _strip_confidence(text: str) -> str:
     return _CONFIDENCE_RE.sub("", text or "").strip()
 
@@ -135,6 +150,7 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
     tool_log: list[dict[str, Any]] = []
     retries_left = max_retries
     tool_calls_made = 0
+    best_score: float | None = None  # best top rerank score across all searches
 
     with obs.observation("agent.run", as_type="agent", input=question):
         trace_id = obs.current_trace_id()
@@ -157,6 +173,10 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
                     else:
                         output = _exec_tool(call, tool_log)
                         tool_calls_made += 1
+                        if call.name == "hybrid_search":
+                            score = _top_retrieval_score(output)
+                            if score is not None and (best_score is None or score > best_score):
+                                best_score = score
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
                 continue
 
@@ -178,17 +198,24 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
                 resp = _chat(messages, turn, "none")
                 answer = resp.content or ""
             confidence = _confidence(answer)
+            # Gate on the retrieval score when we actually searched; otherwise
+            # (e.g. a SQL-only answer) fall back to the model's self-report.
+            if best_score is not None:
+                gate = "low" if best_score < settings.confidence_score_threshold else "high"
+            else:
+                gate = confidence
 
             # One confidence-triggered retry: nudge a reformulation instead of giving up.
-            if confidence == "low" and retries_left > 0 and not final_turn:
+            if gate == "low" and retries_left > 0 and not final_turn:
                 retries_left -= 1
                 messages.append({"role": "assistant", "content": answer})
                 messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "That answer was low-confidence. Reformulate your search with "
-                            "different keywords or filters and use the tools again before answering."
+                            "That answer was low-confidence (weak retrieval evidence). "
+                            "Reformulate your search with different keywords or filters "
+                            "and use the tools again before answering."
                         ),
                     }
                 )
@@ -201,6 +228,8 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
                 confidence=confidence,
                 trace_id=trace_id,
                 tool_log=tool_log,
+                retrieval_score=best_score,
+                gate=gate,
             )
             break
 
@@ -213,6 +242,8 @@ def run(question: str, max_turns: int = MAX_TURNS, max_retries: int = MAX_RETRIE
                 confidence="low",
                 trace_id=trace_id,
                 tool_log=tool_log,
+                retrieval_score=best_score,
+                gate="low",
             )
 
         obs.set_trace_io(output=result.answer)

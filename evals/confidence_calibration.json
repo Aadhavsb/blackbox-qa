@@ -1,0 +1,84 @@
+{
+  "n": 12,
+  "k": 5,
+  "recommended_threshold": {
+    "threshold": 4.5047,
+    "tpr": 1.0,
+    "fpr": 0.0,
+    "youden_j": 1.0
+  },
+  "success_scores": {
+    "n": 9,
+    "min": 5.802,
+    "max": 9.4948,
+    "mean": 7.7457
+  },
+  "failure_scores": {
+    "n": 3,
+    "min": -0.7277,
+    "max": 3.2074,
+    "mean": 1.2244
+  },
+  "per_query": [
+    {
+      "query": "midair collision between two light aircraft near a county airport in California",
+      "top_score": 3.2074,
+      "success": false
+    },
+    {
+      "query": "ground crew member fatally struck by a spinning propeller on the ramp",
+      "top_score": 1.1935,
+      "success": false
+    },
+    {
+      "query": "Boeing 747 lost all four electrical generator control units and landed on standby power",
+      "top_score": -0.7277,
+      "success": false
+    },
+    {
+      "query": "small airplane forced landing in the Florida Everglades after losing engine power",
+      "top_score": 7.6489,
+      "success": true
+    },
+    {
+      "query": "twin-engine airplane crashed into the ocean shortly after takeoff from Kodiak Alaska",
+      "top_score": 8.8701,
+      "success": true
+    },
+    {
+      "query": "commuter airplane disappeared from radar over the ocean near Kauai Hawaii",
+      "top_score": 5.802,
+      "success": true
+    },
+    {
+      "query": "airliner being towed collided with another jet at San Francisco airport",
+      "top_score": 7.3687,
+      "success": true
+    },
+    {
+      "query": "airplane lost power after takeoff and crashed into a house in a residential area in Namibia",
+      "top_score": 9.4701,
+      "success": true
+    },
+    {
+      "query": "Airbus A319 had a sudden uncommanded roll upset at cruise altitude over British Columbia",
+      "top_score": 6.3333,
+      "success": true
+    },
+    {
+      "query": "air ambulance Cessna Caravan struck snow-covered terrain during the landing flare in Alaska",
+      "top_score": 7.4675,
+      "success": true
+    },
+    {
+      "query": "floatplane lost engine power and went down near The Dalles in Washington state",
+      "top_score": 7.2555,
+      "success": true
+    },
+    {
+      "query": "light sport aircraft lost engine power on final approach and made a forced landing in Maryland",
+      "top_score": 9.4948,
+      "success": true
+    }
+  ]
+}
