@@ -2,7 +2,7 @@
 
 Agentic question-answering over public **NTSB aviation incident reports**.
 
-> **Status: runs end-to-end.** Ingest → hybrid retrieval + rerank → tool-calling agent → self-hosted Langfuse tracing/scoring → a manually-triggered GitHub Actions eval pipeline are all built and green. Remaining work is a cloud deploy (phase 6) and doc polish (phase 7).
+> **Status: runs end-to-end.** Ingest → hybrid retrieval + rerank → tool-calling agent → self-hosted Langfuse tracing/scoring → a manually-triggered GitHub Actions eval pipeline are all built and green. Remaining work is a cloud deploy (phase 6).
 
 ## What it is
 
@@ -21,22 +21,24 @@ A natural-language question goes in (`"were there more engine failures on 737s o
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    Q([Question]) --> A["Agent loop<br/>(≤8 turns, ≤16 tool calls)"]
-    A -->|tool call| T{Which tool?}
-    T --> HS["hybrid_search<br/>BM25 + dense → RRF → cross-encoder rerank"]
-    T --> SQL["sql_query<br/>read-only SELECT, validated"]
-    T --> FR["fetch_full_report"]
-    HS --> PG[("Postgres + pgvector<br/>HNSW + tsvector")]
-    SQL --> PG
-    FR --> PG
-    PG -->|results| A
-    A -->|top rerank score &lt; threshold| RW["query rewrite + retry ×1"]
-    RW --> A
-    A --> ANS([grounded, cited answer])
-    A -. trace + token cost .-> LF[("Langfuse<br/>(optional)")]
-    JU["LLM-as-judge"] -. answer_quality + citation_match .-> LF
+```
+question
+   │
+   ▼
+agent loop   (≤8 turns · ≤16 tool calls · 1 retry on weak retrieval evidence)
+   │  picks one tool per turn
+   ├──▶ hybrid_search       BM25 + dense → RRF → cross-encoder rerank
+   ├──▶ sql_query           read-only, validated SELECT
+   └──▶ fetch_full_report   full report by ev_id
+                 │
+                 ▼
+        Postgres + pgvector   (HNSW vectors · tsvector full-text)
+                 │
+                 ▼
+        grounded, cited answer
+
+every run → Langfuse trace: per-turn token usage + out-of-band judge
+scores (answer_quality · citation_match) on the same trace   (optional)
 ```
 
 ## Data
@@ -64,7 +66,7 @@ Prerequisites: Docker (Postgres) and `mdbtools` (`sudo apt install mdbtools`) fo
 
 A raw tool-calling loop (no framework) with three tools — `hybrid_search` (narrative search, reranked), `sql_query` (read-only `SELECT` over structured fields), and `fetch_full_report` (full report by `ev_id`). The loop is bounded (~8 turns + a total tool-call ceiling), validates tool arguments and feeds errors back for self-correction (unexpected tool failures are caught and returned, never crash the loop), and forces a text answer on the final turn (`tool_choice="none"`, with a repair step if the model still withholds text). The `sql_query` tool is guarded to single read-only `SELECT`s (rejected: multi-statement, DDL/DML, and side-effect functions like `pg_sleep`/`pg_read_file`) plus a DB-level read-only transaction and a least-privilege role. The LLM client retries on rate-limit (429 / Groq 413 TPM) with server-suggested backoff.
 
-**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set with a Youden's-J sweep (`python -m evals.run --mode calibrate`): across 25 queries the 3 failed retrievals top out at 3.21 while successes mostly sit far higher (mean ≈ 7.6), so the gate sits at **4.42** — catching every failed retrieval (TPR 1.0) at the cost of one needless retry on a genuinely-good answer (FPR 0.045). The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report. The clean-looking margin is partly small-sample luck; treat 4.42 as a direction and re-calibrate as the gold set grows (`evals/confidence_calibration.json`).
+**Confidence gate.** The one query-rewrite retry fires on a *calibrated* signal: the top cross-encoder rerank score of the evidence the agent gathered. A low top score means nothing relevant was retrieved — a far more honest "should I retry?" input than the model's self-reported `CONFIDENCE` line, which tracks fluency, not evidence. The threshold is chosen against the gold set with a Youden's-J sweep (`python -m evals.run --mode calibrate`): across 25 queries the 3 failed retrievals top out at 3.21 while successes mostly sit far higher (mean ≈ 7.6), so the gate sits at **4.42** — catching every failed retrieval (TPR 1.0) at the cost of one needless retry on a genuinely-good answer (FPR 0.045). The self-report is still recorded alongside the score so the two can be compared. When no search ran (a SQL-only answer), the gate falls back to the self-report. (Calibration is on a small sample — see [Failure modes](#failure-modes--limitations).)
 
 ### Observability (optional)
 
@@ -74,13 +76,7 @@ Self-hosted Langfuse, behind a Compose profile (`docker compose --profile observ
 poetry run python -m evals.run --mode judge-slice --limit 5
 ```
 
-A real agent run, traced — the observation tree (a generation per turn + a span per tool call), token usage, and both judge scores attached to the **same** trace:
-
-![Langfuse trace of an agent run, with answer_quality 0.95 and citation_match on the same trace](docs/langfuse-trace.png)
-
-The confidence gate doing its job on a query the retriever can't satisfy (*"747 lost all four generator control units"*): weak evidence → low judge scores (`answer_quality 0.10`, `citation_match False`):
-
-![Langfuse trace of a low-confidence agent run scored 0.10](docs/langfuse-trace-lowconf.png)
+Example traces — the observation tree with per-turn token usage and both judge scores on one trace, plus a low-confidence failure case showing the gate — are in [`docs/tracing/`](docs/tracing/).
 
 ## Results
 
