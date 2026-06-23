@@ -97,12 +97,12 @@ Baselines committed at `evals/baseline.json` and `evals/ablation.json` (CI PR ga
 
 **Full ingest** (30,646 reports / 125,213 chunks, same gold set): Recall@5 drops to **0.40** hybrid / **0.64** hybrid+rerank — more distractors at scale; rerank helps materially (+0.24 Recall@5). BM25-only stays at 0.04.
 
-**End-to-end answer quality** (full 25-query gold set, LLM-as-judge, `evals/answers.json`):
+**End-to-end answer quality** (full 25-query gold set, LLM-as-judge, `evals/answers.json` — measured on **full ingest**):
 
 | Metric | Score |
 |---|---|
-| `citation_match` rate | 0.84 |
-| `answer_quality` mean | 0.856 |
+| `citation_match` rate | 0.68 |
+| `answer_quality` mean | 0.757 |
 
 `citation_match` is a lower bound — it fires only when the agent cites the exact gold `ev_id`; answers citing a different valid incident score 0 even when correct. `answer_quality` is a 0–1 judge score assessing answer accuracy and grounding. Reproduce:
 

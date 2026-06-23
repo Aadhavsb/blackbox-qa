@@ -1,189 +1,188 @@
 {
   "summary": {
     "n": 25,
-    "citation_match_rate": 0.84,
-    "answer_quality_mean": 0.856
+    "citation_match_rate": 0.68,
+    "answer_quality_mean": 0.7568
   },
   "results": [
     {
       "query": "midair collision between two light aircraft near a county airport in California",
-      "citation_match": 1,
+      "citation_match": 0,
       "answer_quality": 0.96,
       "confidence": "high",
-      "trace_id": "4fa5368d37c60a426e49a2c02e1651e0"
+      "trace_id": "ff2b81d2ebb89692713365b24f70621a"
     },
     {
       "query": "ground crew member fatally struck by a spinning propeller on the ramp",
       "citation_match": 1,
-      "answer_quality": 0.85,
+      "answer_quality": 0.97,
       "confidence": "high",
-      "trace_id": "a35d8a94d794b7d240166a989575619d"
+      "trace_id": "7ccc8d62e2f4f314129ba34f5c035102"
     },
     {
       "query": "Boeing 747 lost all four electrical generator control units and landed on standby power",
       "citation_match": 0,
-      "answer_quality": 0.1,
-      "confidence": "low",
-      "trace_id": "e45c9112607ba56662a012f763ebcfbf"
+      "answer_quality": 0.2,
+      "confidence": "high",
+      "trace_id": "ed51f7cc1e633733d6209e7b65afae11"
     },
     {
       "query": "small airplane forced landing in the Florida Everglades after losing engine power",
       "citation_match": 0,
-      "answer_quality": 0.7,
+      "answer_quality": 0.3,
       "confidence": "high",
-      "trace_id": "7033bb4e05c7117f65628233f246b5a3"
+      "trace_id": "2496123aac97eef2b7a567d9ed4c4015"
     },
     {
       "query": "twin-engine airplane crashed into the ocean shortly after takeoff from Kodiak Alaska",
-      "citation_match": 0,
-      "answer_quality": 0.0,
-      "confidence": "error",
-      "trace_id": null,
-      "error": "Error code: 400 - {'error': {'message': \"Failed to call a function. Please adjust your prompt. See 'failed_generation' for more details.\", 'type': 'invalid_request_error', 'code': 'tool_use_failed', 'failed_generation': 'The twin-engine airplane that crashed into the ocean shortly after takeoff from Kodiak, Alaska, was a Piper PA-31-350, registration N509FN. The accident occurred on January 5, 2008, at 1343 Alaska standard time, resulting in the deaths of the pilot and 5 passengers [20080116X00063].'}}"
+      "citation_match": 1,
+      "answer_quality": 0.9,
+      "confidence": "high",
+      "trace_id": "137c6e781523b4a3a87d449ccccf7817"
     },
     {
       "query": "commuter airplane disappeared from radar over the ocean near Kauai Hawaii",
       "citation_match": 1,
       "answer_quality": 0.95,
       "confidence": "high",
-      "trace_id": "4972b4c2dcc2969d1e6e841bcda61e91"
+      "trace_id": "da93a9ed4b1f9e603ed6d412a52f19cc"
     },
     {
       "query": "airliner being towed collided with another jet at San Francisco airport",
-      "citation_match": 1,
-      "answer_quality": 0.95,
+      "citation_match": 0,
+      "answer_quality": 0.97,
       "confidence": "high",
-      "trace_id": "610b42192756c23b3d43656228277507"
+      "trace_id": "3e92620e4ec50d3151bf1347ef481766"
     },
     {
       "query": "airplane lost power after takeoff and crashed into a house in a residential area in Namibia",
-      "citation_match": 1,
-      "answer_quality": 0.9,
+      "citation_match": 0,
+      "answer_quality": 0.75,
       "confidence": "high",
-      "trace_id": "4cc9e304c9301da7acfae8ea24fae27a"
+      "trace_id": "5ff12c1f21f20c90d4848b868454cf74"
     },
     {
       "query": "Airbus A319 had a sudden uncommanded roll upset at cruise altitude over British Columbia",
       "citation_match": 1,
-      "answer_quality": 0.96,
+      "answer_quality": 0.7,
       "confidence": "high",
-      "trace_id": "bbc3f365f5d17b02cf3abb80ac8c491c"
+      "trace_id": "c6795f8b6145079bad583f1c2fbfc9f3"
     },
     {
       "query": "air ambulance Cessna Caravan struck snow-covered terrain during the landing flare in Alaska",
       "citation_match": 1,
-      "answer_quality": 1.0,
+      "answer_quality": 0.96,
       "confidence": "high",
-      "trace_id": "45c5f804e3dc415195e66a600a7cd1a2"
+      "trace_id": "3fc57c7d72c5db96b3cb6d8170d7efc3"
     },
     {
       "query": "floatplane lost engine power and went down near The Dalles in Washington state",
-      "citation_match": 1,
-      "answer_quality": 1.0,
-      "confidence": "high",
-      "trace_id": "e861a2e03a707e67f0781c0f52fd5256"
+      "citation_match": 0,
+      "answer_quality": 0.0,
+      "confidence": "low",
+      "trace_id": "138d559fad85663021b3b325f33d9d23"
     },
     {
       "query": "light sport aircraft lost engine power on final approach and made a forced landing in Maryland",
-      "citation_match": 1,
-      "answer_quality": 0.97,
-      "confidence": "high",
-      "trace_id": "52fd430b53f415874dc586aebd5ccb84"
+      "citation_match": 0,
+      "answer_quality": 0.2,
+      "confidence": "low",
+      "trace_id": "e21fe2bebb9c1d0e395142c98aef0014"
     },
     {
       "query": "helicopter's right door blew open while hover taxiing during a maintenance track-and-balance flight in New Jersey",
       "citation_match": 1,
-      "answer_quality": 0.95,
+      "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "ad3a5db7a7b549941c2ac37a77a3ba40"
+      "trace_id": "852dcd2d698959978a0cc2852bb05c3a"
     },
     {
       "query": "experimental North American T-28 warbird made a forced landing on rocky desert terrain after total engine power loss near Kingman Arizona",
       "citation_match": 1,
       "answer_quality": 1.0,
       "confidence": "high",
-      "trace_id": "4e21f4c5a3eb61ba2216a5efc7bcfee0"
+      "trace_id": "44482af962beed6c5e928b7a6173f42b"
     },
     {
       "query": "Eclipse very light jet lost thrust control on both engines during an approach to Chicago Midway",
       "citation_match": 1,
-      "answer_quality": 0.7,
+      "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "118f9a9282b039ed96c04f74944c6a57"
+      "trace_id": "bfec3a9e619f8ed003099e61f7de5b60"
     },
     {
       "query": "Cessna 210 on an aerial survey flight collided with terrain in Queensland Australia, killing the pilot",
       "citation_match": 1,
-      "answer_quality": 1.0,
+      "answer_quality": 0.6,
       "confidence": "high",
-      "trace_id": "2ebfb82d0dff502aa1ab53473138d2c7"
+      "trace_id": "f28c544c2844f756496918406402b5e7"
     },
     {
       "query": "pressurized Piper Malibu broke up in flight at cruise altitude over Alberta Canada after a gyroscope problem",
       "citation_match": 1,
-      "answer_quality": 1.0,
+      "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "22da65bdcef4b7088197b55c8c42caa1"
+      "trace_id": "92bb2cb137251650d6f5a3a0459c39e3"
     },
     {
       "query": "glider arrived short of the airport during a timed soaring competition in Vermont",
       "citation_match": 1,
       "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "cf31ed20d7d21af460c233d069dee270"
+      "trace_id": "e6c9dcb430e2edc689035ef47d95122b"
     },
     {
       "query": "hot air balloon envelope caught fire during a tethered ascent in Missouri, fatally injuring the pilot",
       "citation_match": 1,
-      "answer_quality": 0.9,
+      "answer_quality": 0.96,
       "confidence": "high",
-      "trace_id": "d748c90001bfc4949c970c574d7333dd"
+      "trace_id": "e4881978acf0b0f84ded0e2b6cd3d338"
     },
     {
       "query": "Ryanair 737 struck multiple birds and its left main landing gear collapsed on touchdown at Rome Ciampino",
       "citation_match": 1,
       "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "6c2fa74c0abb486136d93a7772d06ebf"
+      "trace_id": "823505913ab1bfa737d304da03f972e6"
     },
     {
       "query": "smoke filled the cabin of a parked Boeing 737 during deicing operations at Seattle airport",
       "citation_match": 1,
-      "answer_quality": 0.96,
+      "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "eec407f10d4315668577ea8dbd2ff85b"
+      "trace_id": "146c86412e435ce0d4a4a30e14acda65"
     },
     {
       "query": "Robinson R22 helicopter began spinning rapidly to the left on the ground when the throttle was advanced for takeoff in Kentucky",
       "citation_match": 1,
-      "answer_quality": 0.95,
+      "answer_quality": 0.9,
       "confidence": "high",
-      "trace_id": "c877f3410a400687d057431f28532282"
+      "trace_id": "0049c55641f133f0d6d5d6c70db3ed2e"
     },
     {
       "query": "Cessna 172 lost partial engine power and came to rest inverted after a precautionary landing in the California desert",
       "citation_match": 1,
       "answer_quality": 1.0,
       "confidence": "high",
-      "trace_id": "caed78d26ccfc265e7e6d114c0c706ef"
+      "trace_id": "293eae23f2f42892627f1d854fd6d4e1"
     },
     {
       "query": "North American T-28 in a three-ship formation had high oil temperature and the engine quit near Waxahachie Texas",
       "citation_match": 0,
-      "answer_quality": 0.8,
+      "answer_quality": 0.2,
       "confidence": "high",
-      "trace_id": "d4c9489cc8cc766541880fabf96981cb"
+      "trace_id": "454ad61b382552f1c8cca7e0111d7d45"
     },
     {
       "query": "Bell 206 helicopter crashed into mountainous terrain in Turkey, killing all six on board",
       "citation_match": 1,
       "answer_quality": 1.0,
       "confidence": "high",
-      "trace_id": "0ad43d914febb2972b28984d9b2e6455"
+      "trace_id": "946c617191ac29fc2e59e87be20af26d"
     }
   ],
-  "corpus": "NTSB 2008-2009 slice (3000 reports, ~14k chunks)",
+  "corpus": "NTSB full ingest (30,646 reports, 125,213 chunks)",
   "gold_n": 25,
   "judge_model": "openai/gpt-oss-120b via Groq",
-  "note": "One query hit a Groq tool_use_failed 400 and scored 0/0.0 (counted in means). Regenerate: poetry run python -m evals.run --mode full"
+  "note": "Full-corpus end-to-end agent + LLM-as-judge. Regenerate: poetry run python -m evals.run --mode full --out evals/answers.json"
 }
