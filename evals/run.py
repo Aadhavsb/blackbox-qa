@@ -245,7 +245,7 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, default=None, help="baseline results JSON")
     parser.add_argument("--max-drop", type=float, default=0.01, help="allowed Recall@k drop")
     parser.add_argument("--limit", type=int, default=None, help="cap rows (judge-slice)")
-    parser.add_argument("--out", type=Path, default=None, help="write result JSON here (calibrate)")
+    parser.add_argument("--out", type=Path, default=None, help="write result JSON here")
     args = parser.parse_args()
 
     if not args.gold.exists():
@@ -265,19 +265,34 @@ def main() -> int:
     if args.mode == "judge-slice":
         # A subset for a quick signal; default 12 cases unless --limit overrides.
         limit = args.limit if args.limit is not None else 12
-        print(json.dumps(run_judge_slice(gold, limit=limit), indent=2))
+        result = run_judge_slice(gold, limit=limit)
+        print(json.dumps(result, indent=2))
+        if args.out:
+            args.out.write_text(json.dumps(result, indent=2) + "\n")
+            print(f"wrote {args.out}")
         return 0
     if args.mode == "full":
         # Full judged run over the ENTIRE gold set, using the same (free) judge
         # model as the slice. --limit still caps it if given.
-        print(json.dumps(run_judge_slice(gold, limit=args.limit), indent=2))
+        result = run_judge_slice(gold, limit=args.limit)
+        print(json.dumps(result, indent=2))
+        if args.out:
+            args.out.write_text(json.dumps(result, indent=2) + "\n")
+            print(f"wrote {args.out}")
         return 0
     if args.ablation:
-        print(json.dumps(run_ablation(gold, args.k), indent=2))
+        result = run_ablation(gold, args.k)
+        print(json.dumps(result, indent=2))
+        if args.out:
+            args.out.write_text(json.dumps(result, indent=2) + "\n")
+            print(f"wrote {args.out}")
         return 0
 
     result = run_retrieval(gold, args.k, use_rerank=args.rerank, bm25_only=args.bm25_only)
     print(json.dumps(result, indent=2))
+    if args.out:
+        args.out.write_text(json.dumps(result, indent=2) + "\n")
+        print(f"wrote {args.out}")
 
     if args.baseline and args.baseline.exists():
         base = json.loads(args.baseline.read_text())

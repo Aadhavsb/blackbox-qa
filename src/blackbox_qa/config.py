@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # anomalous low-scoring success). See evals/confidence_calibration.json.
     confidence_score_threshold: float = 4.42
 
-    langfuse_enabled: bool = False
+    langfuse_enabled: bool = True
     langfuse_host: str | None = None
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None

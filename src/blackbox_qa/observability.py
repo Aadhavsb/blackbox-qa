@@ -1,8 +1,8 @@
 """Langfuse tracing + scoring adapter.
 
-Strictly optional: when LANGFUSE_ENABLED is false (or keys are missing) every
-function here is a no-op, so the agent runs identically with no observability
-dependency. Tracing is async/batched by the SDK, so it stays off the request's
+On by default (LANGFUSE_ENABLED=true). When disabled, keys are missing, or the
+Langfuse stack is unreachable, every function here is a no-op — the agent still
+runs. Tracing is async/batched by the SDK, so it stays off the request's
 critical path; scores are posted out-of-band by trace_id.
 """
 

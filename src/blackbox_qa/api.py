@@ -1,6 +1,6 @@
 """FastAPI HTTP interface — a thin wrapper over agent.run(), same as the CLI.
 
-Run: poetry run uvicorn blackbox_qa.api:app --reload
+Run: make serve  (or: poetry run uvicorn blackbox_qa.api:app --reload --reload-dir src)
 """
 
 from __future__ import annotations

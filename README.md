@@ -15,7 +15,7 @@ A natural-language question goes in (`"were there more engine failures on 737s o
   - `sql_query` — read-only aggregate queries over the structured fields
   - `fetch_full_report` — pull a full report by ID
   - Weak-evidence answers trigger one bounded query-rewrite + re-retrieval retry, gated on the **cross-encoder retrieval score** (a calibrated signal) rather than the model's self-report.
-- **Observability**: every request traced in self-hosted **Langfuse** (optional Compose profile); LLM-as-judge scores posted back to the same traces via the Scores API.
+- **Observability**: every request traced in self-hosted **Langfuse** (started by `make db-up`); LLM-as-judge scores posted back to the same traces via the Scores API.
 - **Evaluation**: a frozen 25-query gold set drives a GitHub Actions pipeline with two triggers: a **Recall@5 regression gate on every PR** (deterministic, free, fast), and a manually-triggered mode for the LLM-as-judge tiers (slice and full).
 - **`docker compose up`** runs the whole thing.
 
@@ -50,10 +50,9 @@ NTSB aviation accident data (1982–present) from <https://data.ntsb.gov/avdata/
 Dependencies are managed with [Poetry](https://python-poetry.org/) (`pyproject.toml` + `poetry.lock`).
 
 ```bash
-poetry install                          # runtime + dev deps
-# poetry install --extras observability # + Langfuse
+poetry install                          # runtime + dev deps + Langfuse SDK
 
-make db-up        # start Postgres (pgvector) via docker compose
+make db-up        # Postgres (pgvector) + self-hosted Langfuse stack
 make ingest       # download NTSB data, convert .mdb, load + embed + index
 make serve        # FastAPI app
 # or:
@@ -70,7 +69,7 @@ A raw tool-calling loop (no framework) with three tools — `hybrid_search` (nar
 
 ### Observability (optional)
 
-Self-hosted Langfuse, behind a Compose profile (`docker compose --profile observability up`): each agent run is a trace, with a generation per LLM turn (token usage → cost) and a span per tool call. Quality is scored out-of-band and attached to the run's trace by `trace_id` via the Scores API — a deterministic `citation_match` (did it cite a gold `ev_id`?) and an LLM-as-judge `answer_quality` (0–1). Tracing is async/batched so it adds no latency to the request; when `LANGFUSE_ENABLED=false` (default) all of it is a no-op. Run the judge-scored slice with:
+Self-hosted Langfuse (`make db-up` starts it alongside Postgres): each agent run is a trace, with a generation per LLM turn (token usage → cost) and a span per tool call. Quality is scored out-of-band and attached to the run's trace by `trace_id` via the Scores API — a deterministic `citation_match` (did it cite a gold `ev_id`?) and an LLM-as-judge `answer_quality` (0–1). Tracing is async/batched so it adds no latency to the request; set `LANGFUSE_ENABLED=false` in `.env` to disable. Run the judge-scored slice with:
 
 ```bash
 poetry run python -m evals.run --mode judge-slice --limit 5
@@ -94,7 +93,9 @@ BM25 alone nearly fails on this corpus (Recall@5 0.04) because the gold queries 
 poetry run python -m evals.run --ablation --k 5
 ```
 
-Baselines committed at `evals/baseline.json` and `evals/ablation.json`.
+Baselines committed at `evals/baseline.json` and `evals/ablation.json` (CI PR gate uses the hermetic fixture in `evals/fixtures/` instead — see `evals/README.md`).
+
+**Full ingest** (30,646 reports / 125,213 chunks, same gold set): Recall@5 drops to **0.40** hybrid / **0.64** hybrid+rerank — more distractors at scale; rerank helps materially (+0.24 Recall@5). BM25-only stays at 0.04.
 
 **End-to-end answer quality** (full 25-query gold set, LLM-as-judge, `evals/answers.json`):
 

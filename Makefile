@@ -3,7 +3,7 @@
 help:
 	@echo "Targets:"
 	@echo "  install  Install deps into a poetry venv"
-	@echo "  db-up    Start Postgres (pgvector) via docker compose"
+	@echo "  db-up    Start Postgres + Langfuse stack (docker compose --profile observability)"
 	@echo "  db-down  Stop and remove the local stack"
 	@echo "  ingest   Download NTSB data, convert .mdb, load + embed + index"
 	@echo "  serve    Run the FastAPI app"
@@ -13,10 +13,10 @@ help:
 	@echo "  test     Run pytest"
 
 install:
-	poetry install
+	poetry install --extras observability
 
 db-up:
-	docker compose up -d postgres
+	docker compose --profile observability up -d
 
 db-down:
 	docker compose down
@@ -26,7 +26,7 @@ ingest:
 	poetry run python -m blackbox_qa.ingest
 
 serve:
-	poetry run uvicorn blackbox_qa.api:app --reload --port 8000
+	poetry run uvicorn blackbox_qa.api:app --reload --reload-dir src --port 8000
 
 eval:
 	poetry run python -m evals.run --mode retrieval

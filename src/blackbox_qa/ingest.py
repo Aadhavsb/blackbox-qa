@@ -227,6 +227,7 @@ def load_chunks(mdb_path: Path, embed_batch: int = 256) -> int:
             rows = [(m[0], m[1], m[2], t, v) for m, t, v in zip(meta, texts, vecs, strict=True)]
             cur.executemany(sql, rows)
             inserted += len(rows)
+            print(f"  embedded {inserted} chunks...", flush=True)
             meta.clear()
             texts.clear()
 
@@ -267,6 +268,7 @@ def main() -> int:
         n = load_reports(mdb_path, limit=args.limit)
         print(f"loaded {n} reports (total in db: {db.count_rows('reports')})")
     if args.stage in ("chunks", "all"):
+        print("chunking + embedding narratives (CPU-heavy; progress every 256 chunks)...")
         n = load_chunks(mdb_path)
         print(f"loaded {n} chunks (total in db: {db.count_rows('report_chunks')})")
     return 0

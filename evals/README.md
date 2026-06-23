@@ -34,3 +34,5 @@ CI runs against a small, deterministic, committed corpus instead of downloading/
 
 - `fixtures/seed.sql` — 25 gold reports + 60 distractors (with chunks + rounded embeddings), regenerable from a populated local DB via `python -m evals.fixtures.build_fixture`.
 - `fixtures/ci_baseline.json` — the fixture's own Recall@5 / MRR baseline (distinct from the full-corpus `baseline.json`); the CI retrieval gate compares against it.
+- `baseline.json` — hybrid Recall@5 / MRR on the **full ingested corpus** (local only; not used as the PR gate).
+- `ablation.json` — bm25 vs hybrid vs hybrid+rerank on the full corpus. Regenerate after ingest: `poetry run python -m evals.run --ablation --k 5 --out evals/ablation.json`

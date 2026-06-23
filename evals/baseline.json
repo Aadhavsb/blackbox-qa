@@ -1,7 +1,7 @@
 {
   "n": 25,
-  "recall@5": 0.88,
-  "mrr": 0.7513,
-  "corpus": "NTSB 2008-2009 slice (3000 reports, ~14k chunks)",
-  "note": "Hybrid retrieval (dense bge-small + Postgres FTS, RRF) over the 25-query gold set. Regenerate with: poetry run python -m evals.run --mode retrieval --k 5"
+  "recall@5": 0.4,
+  "mrr": 0.4,
+  "corpus": "NTSB full ingest (30,646 reports, 125,213 chunks)",
+  "note": "Hybrid retrieval (dense bge-small + Postgres FTS, RRF) over the 25-query gold set. CI uses fixtures/ci_baseline.json on the seed fixture instead. Regenerate: poetry run python -m evals.run --mode retrieval --k 5 --out evals/baseline.json"
 }

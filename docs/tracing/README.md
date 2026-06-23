@@ -9,7 +9,7 @@ showing real `agent.run` traces with LLM-as-judge scores attached.
 | [`trace-low-confidence.png`](trace-low-confidence.png) | The confidence gate on weak retrieval (the *"747 lost all four generator control units"* query): low judge scores — `answer_quality 0.10`, `citation_match False`. |
 | [`scores-tab.png`](scores-tab.png) | The Scores tab for the high-confidence trace: `answer_quality` (NUMERIC) and `citation_match` (BOOLEAN), posted out-of-band via the Scores API. |
 
-Reproduce locally (with `LANGFUSE_ENABLED=true` and a project key pair in `.env`):
+Reproduce locally (`make db-up` — tracing is on by default; keys in `.env.example` match the auto-provisioned project):
 
 ```bash
 poetry run python -m evals.run --mode judge-slice --limit 3

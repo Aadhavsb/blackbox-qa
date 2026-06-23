@@ -1,6 +1,7 @@
 """Shared test fixtures.
 
-Disable Langfuse observability for every test by default so unit tests are
+Disable Langfuse observability for every test so unit tests stay hermetic
+(no Langfuse stack required in CI).
 deterministic and never touch the network, regardless of a local .env that
 enables it. Tests that exercise the enabled path re-enable it via monkeypatch.
 """
