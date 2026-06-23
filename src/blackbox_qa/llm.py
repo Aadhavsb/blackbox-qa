@@ -9,6 +9,8 @@ no API key, and zero tokens spent.
 
 from __future__ import annotations
 
+import ast
+import json
 import re
 import time
 from dataclasses import dataclass
@@ -88,6 +90,49 @@ def _is_rate_limited(exc: Exception) -> bool:
     return code == 413 and any(p in text for p in _RATE_LIMIT_PHRASES)
 
 
+def _tool_use_failed_text(exc: Exception) -> str | None:
+    """Groq 400 tool_use_failed: model wrote prose instead of tool_calls.
+
+    The rejected answer is usually in error.failed_generation — recover it so
+    the agent loop can finish instead of crashing the eval run.
+    """
+    if getattr(exc, "status_code", None) != 400:
+        return None
+
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error") or {}
+        if err.get("code") == "tool_use_failed":
+            text = err.get("failed_generation")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+
+    msg = str(exc)
+    if "tool_use_failed" not in msg:
+        return None
+
+    # OpenAI SDK often embeds the provider payload in the exception string.
+    for parser in (json.loads, ast.literal_eval):
+        start = msg.find("{")
+        if start < 0:
+            continue
+        try:
+            payload = parser(msg[start:])
+        except (json.JSONDecodeError, SyntaxError, ValueError):
+            continue
+        if isinstance(payload, dict):
+            err = payload.get("error") or {}
+            if err.get("code") == "tool_use_failed":
+                text = err.get("failed_generation")
+                if isinstance(text, str) and text.strip():
+                    return text.strip()
+
+    m = re.search(r"failed_generation['\"]:\s*['\"](.+?)['\"]\s*[,}\]]", msg, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
 def _create_with_backoff(kwargs: dict[str, Any]):
     """Call the API, retrying on rate-limit errors with backoff."""
     client = _client()
@@ -123,7 +168,14 @@ def chat(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
 
-    resp = _create_with_backoff(kwargs)
+    try:
+        resp = _create_with_backoff(kwargs)
+    except Exception as exc:  # noqa: BLE001 - re-raised unless Groq tool_use_failed
+        recovered = _tool_use_failed_text(exc)
+        if recovered is not None:
+            return LLMResponse(content=recovered, tool_calls=[], usage=None)
+        raise
+
     msg = resp.choices[0].message
     calls = [
         ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments)
