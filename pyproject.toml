@@ -24,6 +24,9 @@ dependencies = [
 [project.optional-dependencies]
 # `poetry install --extras observability` (or `pip install ".[observability]"`)
 observability = ["langfuse"]
+# `poetry install --extras langgraph` — opt-in multi-agent + HITL variant.
+# The framework-free agent.py works without any of these.
+langgraph = ["langgraph", "langchain", "langchain-openai", "langgraph-checkpoint-postgres"]
 
 [project.scripts]
 blackbox-qa = "blackbox_qa.cli:main"
